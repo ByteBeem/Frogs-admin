@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
+import { socket } from "@/lib/socket";
 
 export default function AdminLogin() {
   const router = useRouter();
@@ -12,6 +13,14 @@ export default function AdminLogin() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
+
+
+function connectAdminSocket(token: string) {
+  socket.auth = { token }; 
+  socket.connect();
+}
+
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
@@ -19,7 +28,7 @@ export default function AdminLogin() {
 
     try {
       const res = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/admin/login`,
+        'http://localhost:3000/admin/login',
         {
           method: "POST",
           headers: {
@@ -39,6 +48,8 @@ export default function AdminLogin() {
 
       // ✅ Save JWT
       localStorage.setItem("admin_token", data.token);
+
+      connectAdminSocket(data.token);
 
       // ✅ Redirect
       router.push("/admin");

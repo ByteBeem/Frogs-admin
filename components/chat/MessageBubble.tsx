@@ -1,6 +1,14 @@
 import clsx from "clsx";
 
-export default function MessageBubble({ sender, text, created_at }: any) {
+export default function MessageBubble({
+  sender,
+  text,
+  created_at,
+}: {
+  sender: "admin" | "visitor";
+  text: string;
+  created_at?: string;
+}) {
   const isAdmin = sender === "admin";
 
   return (
@@ -13,12 +21,15 @@ export default function MessageBubble({ sender, text, created_at }: any) {
       )}
     >
       <div>{text}</div>
-      <div className="text-xs text-gray-400 mt-1 text-right">
-        {new Date(created_at).toLocaleTimeString([], {
-          hour: "2-digit",
-          minute: "2-digit",
-        })}
-      </div>
+
+      {created_at && (
+        <div className="text-xs opacity-70 mt-1 text-right">
+          {new Date(created_at).toLocaleTimeString([], {
+            hour: "2-digit",
+            minute: "2-digit",
+          })}
+        </div>
+      )}
     </div>
   );
 }

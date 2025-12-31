@@ -571,7 +571,7 @@ export default function ConversationList({ onSelect }: ConversationListProps) {
               )}
             </div>
 
-            {/* Unread indicator pulse */}
+          
             {c.unreadCount > 0 && (
               <div className="absolute top-4 right-4">
                 <span className="flex h-3 w-3">

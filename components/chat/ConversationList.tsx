@@ -13,7 +13,7 @@ type Conversation = {
   lastMessageSender?: string;
   createdAt: string;
   status?: string;
-  unreadCount?: number;
+  unreadCount: number;
 };
 
 interface ConversationListProps {
@@ -149,7 +149,7 @@ export default function ConversationList({ onSelect }: ConversationListProps) {
     const fetchConversations = async () => {
       setLoading(true);
       try {
-        const response = await fetch("http://localhost:3000/admin/conversations", {
+        const response = await fetch("http://ec2-44-210-134-149.compute-1.amazonaws.com/admin/conversations", {
           headers: {
             Authorization: `Bearer ${localStorage.getItem("admin_token")}`
           }
@@ -160,7 +160,7 @@ export default function ConversationList({ onSelect }: ConversationListProps) {
         const data: Conversation[] = await response.json();
 
         // Get unread counts
-        const unreadResponse = await fetch("http://localhost:3000/api/unread-counts", {
+        const unreadResponse = await fetch("http://ec2-44-210-134-149.compute-1.amazonaws.com/api/unread-counts", {
           headers: {
             Authorization: `Bearer ${localStorage.getItem("admin_token")}`
           }

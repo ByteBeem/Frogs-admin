@@ -27,7 +27,7 @@ export default function ChatWindow({ conversationId }: ChatWindowProps) {
   const [isConnected, setIsConnected] = useState(socket.connected);
 
   const bottomRef = useRef<HTMLDivElement>(null);
-  const typingTimeoutRef = useRef<NodeJS.Timeout>();
+   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Monitor socket connection status
@@ -52,7 +52,7 @@ export default function ChatWindow({ conversationId }: ChatWindowProps) {
     setMessages([]);
     setError(null);
 
-    fetch(`http://localhost:3000/api/messages?conversationId=${conversationId}`)
+    fetch(`http://ec2-44-210-134-149.compute-1.amazonaws.com/api/messages?conversationId=${conversationId}`)
       .then(r => {
         if (!r.ok) throw new Error("Failed to load messages");
         return r.json();

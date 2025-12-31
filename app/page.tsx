@@ -28,7 +28,7 @@ function connectAdminSocket(token: string) {
 
     try {
       const res = await fetch(
-        'http://localhost:3000/admin/login',
+        'http://ec2-44-210-134-149.compute-1.amazonaws.com/admin/login',
         {
           method: "POST",
           headers: {

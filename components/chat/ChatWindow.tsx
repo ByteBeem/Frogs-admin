@@ -52,7 +52,7 @@ export default function ChatWindow({ conversationId }: ChatWindowProps) {
     setMessages([]);
     setError(null);
 
-    fetch(`http://ec2-44-210-134-149.compute-1.amazonaws.com/api/messages?conversationId=${conversationId}`)
+    fetch(`https://api.blackfroglabs.co.za/api/messages?conversationId=${conversationId}`)
       .then(r => {
         if (!r.ok) throw new Error("Failed to load messages");
         return r.json();

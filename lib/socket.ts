@@ -1,6 +1,6 @@
 import { io, Socket } from "socket.io-client";
 
-const SOCKET_URL ="http://ec2-44-210-134-149.compute-1.amazonaws.com";
+const SOCKET_URL ="https://api.blackfroglabs.co.za";
 
 const getToken = (): string | null => {
   if (typeof window !== "undefined") {

@@ -56,7 +56,7 @@ export default function AdminRepairs() {
 
   const fetchRepairs = async () => {
     try {
-      const res = await fetch("https://api.blackfroglabs.co.za/api/repairs");
+      const res = await fetch("http://localhost:3000/api/repairs");
       const data = await res.json();
       setRepairs(data);
     } catch (err) {
@@ -71,7 +71,7 @@ export default function AdminRepairs() {
   const handleAddRepair = async () => {
     setLoading(true);
     try {
-      const res = await fetch("https://api.blackfroglabs.co.za/api/repairs", {
+      const res = await fetch("http://localhost:3000/api/repairs", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(formData),
@@ -90,7 +90,7 @@ export default function AdminRepairs() {
   const handleUpdateRepair = async (id: string) => {
     setLoading(true);
     try {
-      const res = await fetch(`https://api.blackfroglabs.co.za/api/repairs/${id}`, {
+      const res = await fetch(`http://localhost:3000/api/repairs/${id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(formData),
@@ -109,7 +109,7 @@ export default function AdminRepairs() {
   const handleDelete = async (id: string) => {
     if (!confirm("Are you sure you want to delete this repair?")) return;
     try {
-      await fetch(`https://api.blackfroglabs.co.za/api/repairs/${id}`, { method: "DELETE" });
+      await fetch(`http://localhost:3000/api/repairs/${id}`, { method: "DELETE" });
       fetchRepairs();
     } catch (err) {
       console.error(err);
@@ -118,7 +118,7 @@ export default function AdminRepairs() {
 
   const handleQuickStatusUpdate = async (id: string, status: string) => {
     try {
-      await fetch(`https://api.blackfroglabs.co.za/api/repairs/${id}`, {
+      await fetch(`http://localhost:3000/api/repairs/${id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ status }),
@@ -210,7 +210,9 @@ export default function AdminRepairs() {
         {/* Header */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
-           
+            <h1 className="text-5xl font-bold mb-2 bg-gradient-to-r from-emerald-600 to-cyan-600 bg-clip-text text-transparent">
+              Repairs Management
+            </h1>
             <p className="text-slate-600 text-lg">Complete control over all device repairs</p>
           </div>
           <button
@@ -332,7 +334,7 @@ export default function AdminRepairs() {
                         </span>
                       </td>
                       <td className="px-6 py-4">
-                        <p className="font-semibold text-slate-900">R{repair.cost || "50"}</p>
+                        <p className="font-semibold text-slate-900">${repair.cost || "TBD"}</p>
                       </td>
                       <td className="px-6 py-4">
                         <p className="text-sm text-slate-700">{repair.dateReceived}</p>
@@ -484,7 +486,7 @@ export default function AdminRepairs() {
                 </div>
 
                 <div className="space-y-2">
-                  <label className="text-sm font-semibold text-slate-700">Repair Cost (R)</label>
+                  <label className="text-sm font-semibold text-slate-700">Repair Cost ($)</label>
                   <input
                     value={formData.cost}
                     onChange={(e) => setFormData({ ...formData, cost: e.target.value })}

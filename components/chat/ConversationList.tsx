@@ -1,8 +1,11 @@
 "use client";
 
 import { useEffect, useState, useRef, useCallback } from "react";
-import { socket } from "@/lib/socket";
-import { Users, Loader2, Search, Bell, BellOff, Volume2, VolumeX } from "lucide-react";
+import { socket } from "@/lib/socket"; 
+import { Users, Loader2, Search } from "lucide-react";
+
+// Fallback if env variable isn't set, ensuring it works immediately
+const API_URL = "https://api.blackfroglabs.co.za";
 
 type Conversation = {
   id: string;
@@ -25,150 +28,47 @@ export default function ConversationList({ onSelect }: ConversationListProps) {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
-  const [totalUnread, setTotalUnread] = useState(0);
-  const [notificationsEnabled, setNotificationsEnabled] = useState(true);
-  const [soundEnabled, setSoundEnabled] = useState(false); // Show activation status
-  
-  const notificationSound = useRef<HTMLAudioElement | null>(null);
   const activeIdRef = useRef<string | null>(null);
 
-  // Keep activeId in sync with ref
+  // Sync ref for socket callbacks to access current state
   useEffect(() => {
     activeIdRef.current = activeId;
   }, [activeId]);
 
-  // Initialize notification sound
-  useEffect(() => {
-    notificationSound.current = new Audio("/noty.wav");
-    notificationSound.current.volume = 0.5;
+  // --- Sorting Logic ---
+  // 1. Unread messages first
+  // 2. Then newest messages
+  const sortConversations = useCallback((conversations: Conversation[]) => {
+    return [...conversations].sort((a, b) => {
+      const unreadDiff = (b.unreadCount || 0) - (a.unreadCount || 0);
+      if (unreadDiff !== 0) return unreadDiff;
 
-    // Enable sound on first user interaction
-    const enableSound = () => {
-      console.log("[Admin] Enabling notification sound...");
-      
-      // Test play to activate audio context
-      notificationSound.current?.play()
-        .then(() => {
-          console.log("[Admin] ✅ Sound enabled!");
-          notificationSound.current?.pause();
-          if (notificationSound.current) {
-            notificationSound.current.currentTime = 0;
-          }
-          setSoundEnabled(true);
-        })
-        .catch((err) => {
-          console.error("[Admin] ❌ Sound activation failed:", err);
-          setSoundEnabled(false);
-        });
-    };
-
-    // Try multiple events to catch user interaction
-    const events = ['click', 'keydown', 'touchstart'];
-    events.forEach(event => {
-      window.addEventListener(event, enableSound, { once: true });
+      const timeA = new Date(a.lastMessageAt || a.createdAt).getTime();
+      const timeB = new Date(b.lastMessageAt || b.createdAt).getTime();
+      return timeB - timeA;
     });
-
-    return () => {
-      events.forEach(event => {
-        window.removeEventListener(event, enableSound);
-      });
-    };
   }, []);
 
-  // Request notification permissions
-  useEffect(() => {
-    if ("Notification" in window && Notification.permission === "default") {
-      Notification.requestPermission().then(permission => {
-        console.log("[Admin] Notification permission:", permission);
-      });
-    }
-  }, []);
-
-  // Play notification sound
-  const playNotification = useCallback(() => {
-    if (!notificationsEnabled || !soundEnabled) {
-      console.log("[Admin] Sound not played:", { notificationsEnabled, soundEnabled });
-      return;
-    }
-    
-    if (notificationSound.current) {
-      notificationSound.current.currentTime = 0;
-      notificationSound.current.play()
-        .then(() => console.log("[Admin] 🔔 Sound played"))
-        .catch((err) => {
-          console.error("[Admin] Sound play error:", err);
-          // Try to re-enable
-          setSoundEnabled(false);
-        });
-    }
-  }, [notificationsEnabled, soundEnabled]);
-
-  // Show browser notification
-  const showBrowserNotification = useCallback((title: string, body: string, conversationId: string) => {
-    if (!notificationsEnabled) return;
-    
-    if ("Notification" in window && Notification.permission === "granted") {
-      const notification = new Notification(title, {
-        body,
-        icon: "/chat-icon.png",
-        badge: "/chat-icon.png",
-        tag: conversationId,
-        requireInteraction: false
-      });
-
-      notification.onclick = () => {
-        window.focus();
-        notification.close();
-        
-        // Select the conversation
-        if (conversationId) {
-          handleSelect(conversationId);
-        }
-      };
-
-      // Auto close after 5 seconds
-      setTimeout(() => notification.close(), 5000);
-    }
-  }, [notificationsEnabled]);
-
-  // Calculate total unread count
-  useEffect(() => {
-    const total = convos.reduce((sum, c) => sum + (c.unreadCount || 0), 0);
-    setTotalUnread(total);
-
-    // Update page title with unread count
-    if (total > 0) {
-      document.title = `(${total}) Admin Chat`;
-    } else {
-      document.title = "Admin Chat";
-    }
-  }, [convos]);
-
-  // Fetch initial conversations
+  // --- Initial Fetch ---
   useEffect(() => {
     const fetchConversations = async () => {
       setLoading(true);
       try {
-        const response = await fetch("https://api.blackfroglabs.co.za/admin/conversations", {
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem("admin_token")}`
-          }
-        });
+        const token = localStorage.getItem("admin_token");
+        
+        // Fetch conversations and unread counts in parallel
+        const [convosRes, unreadRes] = await Promise.all([
+          fetch(`${API_URL}/admin/conversations`, { headers: { Authorization: `Bearer ${token}` } }),
+          fetch(`${API_URL}/api/unread-counts`, { headers: { Authorization: `Bearer ${token}` } }).catch(() => null)
+        ]);
 
-        if (!response.ok) throw new Error("Failed to fetch conversations");
+        if (!convosRes.ok) throw new Error("Failed to fetch conversations");
 
-        const data: Conversation[] = await response.json();
-
-        // Get unread counts
-        const unreadResponse = await fetch("https://api.blackfroglabs.co.za/api/unread-counts", {
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem("admin_token")}`
-          }
-        }).catch(() => null);
-
-        let unreadCounts: { [key: string]: number } = {};
-        if (unreadResponse && unreadResponse.ok) {
-          unreadCounts = await unreadResponse.json();
+        const data: Conversation[] = await convosRes.json();
+        
+        let unreadCounts: Record<string, number> = {};
+        if (unreadRes && unreadRes.ok) {
+          unreadCounts = await unreadRes.json();
         }
 
         const enrichedData = data.map(c => ({
@@ -177,183 +77,81 @@ export default function ConversationList({ onSelect }: ConversationListProps) {
           unreadCount: unreadCounts[c.id] || 0
         }));
 
-        const sortedData = sortConversations(enrichedData);
-        setConvos(sortedData);
+        setConvos(sortConversations(enrichedData));
 
-        // Auto-select first conversation if none selected
-        if (sortedData.length > 0 && !activeId) {
-          const firstConvo = sortedData[0];
-          setActiveId(firstConvo.id);
-          onSelect(firstConvo.id);
-          socket.emit("chat:join", { conversationId: firstConvo.id });
-        }
       } catch (error) {
-        console.error("Error fetching conversations:", error);
+        console.error("Error loading chat list:", error);
       } finally {
         setLoading(false);
       }
     };
 
     fetchConversations();
-  }, []);
+  }, [sortConversations]);
 
-  // Sort conversations: unread first, then by latest message time
-  const sortConversations = useCallback((conversations: Conversation[]) => {
-    return [...conversations].sort((a, b) => {
-      // Sort by unread count first
-      const unreadDiff = (b.unreadCount || 0) - (a.unreadCount || 0);
-      if (unreadDiff !== 0) return unreadDiff;
-
-      // Then by latest message time
-      const timeA = new Date(a.lastMessageAt || a.createdAt).getTime();
-      const timeB = new Date(b.lastMessageAt || b.createdAt).getTime();
-      return timeB - timeA;
-    });
-  }, []);
-
-  // Handle socket events
+  // --- Socket Event Handlers ---
   useEffect(() => {
-    // Handle initial conversations from socket
-    const handleInitialConversations = ({ conversations, unreadCounts }: any) => {
-      const enriched = conversations.map((c: Conversation) => ({
-        ...c,
-        lastMessageAt: c.lastMessageAt || c.createdAt,
-        unreadCount: unreadCounts[c.id] || 0
-      }));
-
-      setConvos(sortConversations(enriched));
-    };
-
-    // Handle new conversation
-    const handleNewConversation = (newConvo: Conversation) => {
-      console.log("[Admin] 🆕 New conversation received:", newConvo.id);
-      
-      setConvos(prev => {
-        // Check if conversation already exists
-        if (prev.some(c => c.id === newConvo.id)) return prev;
-
-        const enriched = {
-          ...newConvo,
-          lastMessageAt: newConvo.createdAt,
-          unreadCount: 0
-        };
-
-        const updated = [enriched, ...prev];
-        return sortConversations(updated);
-      });
-
-      // Play notification and show browser notification
-      playNotification();
-      showBrowserNotification(
-        "New Conversation",
-        `${newConvo.name} has started a chat`,
-        newConvo.id
-      );
-    };
-
-    // Handle new message
+    // 1. Handle New Messages (Update text & unread count)
     const handleMessage = (msg: any) => {
-      console.log("[Admin] 💬 Message received:", msg);
-      
       setConvos(prev => {
         const updated = prev.map(c => {
           if (c.id === msg.conversationId) {
-            // Calculate new unread count
-            const currentUnread = c.unreadCount || 0;
+            // If message is from visitor AND we aren't looking at this chat, increment unread
             const isUnread = msg.sender === "visitor" && c.id !== activeIdRef.current;
-            const newUnreadCount = isUnread ? currentUnread + 1 : currentUnread;
-
             return {
               ...c,
               lastMessage: msg.text,
               lastMessageAt: msg.createdAt,
               lastMessageSender: msg.sender,
-              unreadCount: newUnreadCount
+              unreadCount: isUnread ? (c.unreadCount || 0) + 1 : c.unreadCount
             };
           }
           return c;
         });
-
         return sortConversations(updated);
       });
     };
 
-    // Handle message notification (for messages in conversations not currently viewing)
-    const handleMessageNotification = ({ conversationId, message, unreadCount }: any) => {
-      console.log("[Admin] 🔔 Message notification:", { conversationId, unreadCount });
-      
-      // Only show notification if not currently viewing this conversation
-      if (conversationId !== activeIdRef.current) {
-        const convo = convos.find(c => c.id === conversationId);
-        const convoName = convo?.name || `Visitor #${conversationId.slice(0, 8)}`;
-
-        // Play sound
-        playNotification();
-
-        // Show browser notification
-        showBrowserNotification(
-          `New message from ${convoName}`,
-          message.text.length > 50 ? message.text.slice(0, 50) + "..." : message.text,
-          conversationId
-        );
-      }
-
-      // Update unread count
+    // 2. Handle New Visitor Conversation
+    const handleNewConversation = (newConvo: Conversation) => {
       setConvos(prev => {
-        const updated = prev.map(c => {
-          if (c.id === conversationId) {
-            return { ...c, unreadCount: unreadCount };
-          }
-          return c;
-        });
-        return sortConversations(updated);
+        if (prev.some(c => c.id === newConvo.id)) return prev;
+        const enriched = { ...newConvo, lastMessageAt: newConvo.createdAt, unreadCount: 1 };
+        return sortConversations([enriched, ...prev]);
       });
     };
 
-    // Handle conversation marked as read
-    const handleConversationRead = ({ conversationId }: any) => {
+    // 3. Handle Mark as Read
+    const handleRead = ({ conversationId }: { conversationId: string }) => {
       setConvos(prev => {
-        const updated = prev.map(c => {
-          if (c.id === conversationId) {
-            return { ...c, unreadCount: 0 };
-          }
-          return c;
-        });
+        const updated = prev.map(c => (c.id === conversationId ? { ...c, unreadCount: 0 } : c));
         return sortConversations(updated);
       });
     };
 
-    // Handle unread counts update
-    const handleUnreadCounts = (unreadCounts: { [key: string]: number }) => {
+    // 4. Handle Bulk Unread Updates
+    const handleUnreadCounts = (counts: Record<string, number>) => {
       setConvos(prev => {
-        const updated = prev.map(c => ({
-          ...c,
-          unreadCount: unreadCounts[c.id] || 0
-        }));
+        const updated = prev.map(c => ({ ...c, unreadCount: counts[c.id] || 0 }));
         return sortConversations(updated);
       });
     };
 
-    // Register socket listeners
-    socket.on("admin:initial-conversations", handleInitialConversations);
-    socket.on("admin:new-conversation", handleNewConversation);
     socket.on("chat:message", handleMessage);
-    socket.on("admin:message-notification", handleMessageNotification);
-    socket.on("admin:conversation-read", handleConversationRead);
+    socket.on("admin:new-conversation", handleNewConversation);
+    socket.on("admin:conversation-read", handleRead);
     socket.on("admin:unread-counts", handleUnreadCounts);
 
     return () => {
-      socket.off("admin:initial-conversations", handleInitialConversations);
-      socket.off("admin:new-conversation", handleNewConversation);
       socket.off("chat:message", handleMessage);
-      socket.off("admin:message-notification", handleMessageNotification);
-      socket.off("admin:conversation-read", handleConversationRead);
+      socket.off("admin:new-conversation", handleNewConversation);
+      socket.off("admin:conversation-read", handleRead);
       socket.off("admin:unread-counts", handleUnreadCounts);
     };
-  }, [convos, playNotification, showBrowserNotification, sortConversations, onSelect]);
+  }, [sortConversations]);
 
+  // --- Select Conversation ---
   const handleSelect = useCallback((id: string) => {
-    // Leave previous conversation room
     if (activeId && activeId !== id) {
       socket.emit("chat:leave", { conversationId: activeId });
     }
@@ -361,239 +159,131 @@ export default function ConversationList({ onSelect }: ConversationListProps) {
     setActiveId(id);
     onSelect(id);
 
-    // Join new conversation room
+    // Join room and mark read
     socket.emit("chat:join", { conversationId: id });
-
-    // Mark conversation as read
     socket.emit("chat:mark-read", { conversationId: id });
 
-    // Update local state
+    // Optimistic update: clear unread count locally immediately
     setConvos(prev => {
       const updated = prev.map(c => (c.id === id ? { ...c, unreadCount: 0 } : c));
-      return sortConversations(updated);
+      return sortConversations(updated); 
     });
-
-    console.log(`[Admin] Selected conversation: ${id}`);
   }, [activeId, onSelect, sortConversations]);
 
-  const toggleNotifications = () => {
-    setNotificationsEnabled(prev => !prev);
-  };
-
-  // Manual sound test
-  const testSound = () => {
-    if (!soundEnabled) {
-      // Try to enable sound
-      notificationSound.current?.play()
-        .then(() => {
-          notificationSound.current?.pause();
-          if (notificationSound.current) {
-            notificationSound.current.currentTime = 0;
-          }
-          setSoundEnabled(true);
-          console.log("[Admin] ✅ Sound manually enabled!");
-        })
-        .catch((err) => {
-          console.error("[Admin] ❌ Manual sound test failed:", err);
-          alert("Please click anywhere on the page first to enable sound notifications.");
-        });
-    } else {
-      playNotification();
-    }
-  };
-
-  const filteredConvos = convos.filter(
-    c =>
-      c.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      c.lastMessage?.toLowerCase().includes(searchTerm.toLowerCase())
+  // --- Helpers ---
+  const filteredConvos = convos.filter(c =>
+    c.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    c.lastMessage?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   const formatTime = (dateString?: string) => {
     if (!dateString) return "";
-    
     const date = new Date(dateString);
     const now = new Date();
     const diffMs = now.getTime() - date.getTime();
     const diffMins = Math.floor(diffMs / 60000);
+    
+    if (diffMins < 1) return "Now";
+    if (diffMins < 60) return `${diffMins}m`;
     const diffHours = Math.floor(diffMs / 3600000);
-    const diffDays = Math.floor(diffMs / 86400000);
-
-    if (diffMins < 1) return "Just now";
-    if (diffMins < 60) return `${diffMins}m ago`;
-    if (diffHours < 24) return `${diffHours}h ago`;
-    if (diffDays < 7) return `${diffDays}d ago`;
-
+    if (diffHours < 24) return `${diffHours}h`;
     return date.toLocaleDateString();
   };
 
   return (
-    <aside className="w-80 border-r bg-white flex flex-col h-full shadow-lg">
+    <aside className="w-80 border-r bg-white flex flex-col h-full shadow-xl z-10">
       {/* Header */}
-      <div className="p-4 border-b bg-gradient-to-r from-green-400 to-blue-500">
+      <div className="p-4 border-b bg-gradient-to-r from-emerald-500 to-cyan-500">
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center">
+            <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center backdrop-blur-sm">
               <Users size={20} className="text-white" />
             </div>
             <div>
-              <h2 className="font-bold text-white text-lg">Conversations</h2>
-              <p className="text-xs text-white/80">
-                {convos.length} active • {totalUnread} unread
+              <h2 className="font-bold text-white text-lg tracking-tight">Inbox</h2>
+              <p className="text-xs text-white/90 font-medium">
+                {convos.length} chats • {convos.reduce((a, b) => a + (b.unreadCount || 0), 0)} unread
               </p>
             </div>
           </div>
-
-          {/* Notification controls */}
-          <div className="flex gap-1">
-            <button
-              onClick={toggleNotifications}
-              className="p-2 hover:bg-white/20 rounded-full transition"
-              title={notificationsEnabled ? "Disable notifications" : "Enable notifications"}
-            >
-              {notificationsEnabled ? (
-                <Bell size={18} className="text-white" />
-              ) : (
-                <BellOff size={18} className="text-white/60" />
-              )}
-            </button>
-            
-            <button
-              onClick={testSound}
-              className="p-2 hover:bg-white/20 rounded-full transition"
-              title={soundEnabled ? "Test sound" : "Click to enable sound"}
-            >
-              {soundEnabled ? (
-                <Volume2 size={18} className="text-white" />
-              ) : (
-                <VolumeX size={18} className="text-white/60" />
-              )}
-            </button>
-          </div>
         </div>
 
-        {/* Sound status indicator */}
-        {!soundEnabled && (
-          <div className="mb-2 text-xs text-white/90 bg-white/10 rounded px-2 py-1">
-            ⚠️ Click anywhere to enable sound notifications
-          </div>
-        )}
-
-        {/* Search Bar */}
+        {/* Search */}
         <div className="relative">
-          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
           <input
             type="text"
             placeholder="Search conversations..."
             value={searchTerm}
             onChange={e => setSearchTerm(e.target.value)}
-            className="w-full pl-9 pr-3 py-2 rounded-full border-0 bg-white/90 text-sm text-gray-700 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-white"
+            className="w-full pl-9 pr-3 py-2.5 rounded-xl border-0 bg-white/95 text-sm text-slate-700 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-white/50 shadow-sm transition-shadow"
           />
         </div>
       </div>
 
-      {/* Conversations List */}
-      <div className="flex-1 overflow-y-auto">
-        {loading && (
-          <div className="flex flex-col items-center justify-center h-full text-gray-400">
-            <Loader2 size={32} className="animate-spin mb-3" />
-            <p className="text-sm">Loading conversations...</p>
+      {/* List */}
+      <div className="flex-1 overflow-y-auto custom-scrollbar">
+        {loading ? (
+          <div className="flex flex-col items-center justify-center h-40 text-slate-400">
+            <Loader2 size={24} className="animate-spin mb-2 text-emerald-500" />
+            <span className="text-xs font-medium">Loading messages...</span>
           </div>
-        )}
-
-        {!loading && filteredConvos.length === 0 && (
-          <div className="flex flex-col items-center justify-center h-full text-gray-400 px-4 text-center">
-            <Users size={48} className="mb-3 opacity-30" />
-            <p className="text-sm font-medium mb-1">
-              {searchTerm ? "No conversations found" : "No conversations yet"}
-            </p>
-            <p className="text-xs">
-              {searchTerm
-                ? "Try a different search term"
-                : "Waiting for visitors to connect..."}
-            </p>
+        ) : filteredConvos.length === 0 ? (
+          <div className="flex flex-col items-center justify-center h-64 text-slate-400 text-center px-6">
+             <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mb-3">
+                <Users size={32} className="opacity-20 text-slate-600" />
+             </div>
+            <p className="text-sm font-medium text-slate-600">No conversations found</p>
+            <p className="text-xs mt-1">Waiting for visitors to start a chat...</p>
           </div>
-        )}
-
-        {filteredConvos.map(c => (
-          <button
-            key={c.id}
-            onClick={() => handleSelect(c.id)}
-            className={`w-full text-left p-4 border-b hover:bg-gray-50 flex items-start gap-3 transition-all relative ${
-              activeId === c.id
-                ? "bg-blue-50 border-l-4 border-l-blue-500"
-                : "border-l-4 border-l-transparent"
-            }`}
-          >
-            {/* Avatar */}
-            <div
-              className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 relative ${
-                activeId === c.id
-                  ? "bg-blue-500 text-white"
-                  : "bg-gray-200 text-gray-600"
-              }`}
+        ) : (
+          filteredConvos.map(c => (
+            <button
+              key={c.id}
+              onClick={() => handleSelect(c.id)}
+              className={`w-full text-left p-4 border-b border-slate-50 hover:bg-slate-50 transition-all relative group
+                ${activeId === c.id ? "bg-emerald-50/60" : ""}
+              `}
             >
-              <Users size={18} />
-              {c.unreadCount > 0 && (
-                <div className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center font-bold">
-                  {c.unreadCount > 9 ? "9+" : c.unreadCount}
+              {/* Active Stripe */}
+              {activeId === c.id && (
+                <div className="absolute left-0 top-0 bottom-0 w-1 bg-gradient-to-b from-emerald-500 to-cyan-500" />
+              )}
+
+              <div className="flex items-start gap-3">
+                {/* Avatar */}
+                <div className={`relative w-10 h-10 rounded-full flex items-center justify-center shrink-0 shadow-sm
+                  ${activeId === c.id ? "bg-gradient-to-br from-emerald-500 to-cyan-500 text-white" : "bg-white text-slate-500 border border-slate-100 group-hover:border-emerald-200 transition-colors"}
+                `}>
+                  <Users size={18} />
+                  {c.unreadCount > 0 && (
+                    <div className="absolute -top-1.5 -right-1.5 min-w-[1.25rem] h-5 px-1 bg-red-500 text-white text-[10px] rounded-full flex items-center justify-center font-bold border-2 border-white shadow-sm animate-pulse">
+                      {c.unreadCount > 9 ? "9+" : c.unreadCount}
+                    </div>
+                  )}
                 </div>
-              )}
-            </div>
 
-            {/* Content */}
-            <div className="flex-1 min-w-0">
-              <div className="flex items-start justify-between mb-1">
-                <h3
-                  className={`font-medium text-sm truncate ${
-                    activeId === c.id ? "text-blue-900" : "text-gray-900"
-                  }`}
-                >
-                  {c.name}
-                </h3>
-                {c.lastMessageAt && (
-                  <span className="text-xs text-gray-400 ml-2 flex-shrink-0">
-                    {formatTime(c.lastMessageAt)}
-                  </span>
-                )}
+                {/* Content */}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between mb-0.5">
+                    <h3 className={`text-sm font-bold truncate ${c.unreadCount > 0 ? "text-slate-900" : "text-slate-700"}`}>
+                      {c.name}
+                    </h3>
+                    <span className={`text-[10px] shrink-0 ${c.unreadCount > 0 ? "text-emerald-600 font-bold" : "text-slate-400"}`}>
+                      {formatTime(c.lastMessageAt)}
+                    </span>
+                  </div>
+                  
+                  <p className={`text-xs truncate ${c.unreadCount > 0 ? "text-slate-900 font-medium" : "text-slate-500"}`}>
+                    {c.lastMessageSender === "admin" && <span className="text-slate-400 font-normal">You: </span>}
+                    {c.lastMessage || <span className="italic text-slate-400">No messages yet</span>}
+                  </p>
+                </div>
               </div>
-
-              {c.lastMessage && (
-                <p
-                  className={`text-xs truncate ${
-                    c.unreadCount > 0
-                      ? "text-gray-900 font-semibold"
-                      : "text-gray-500"
-                  }`}
-                >
-                  {c.lastMessageSender === "admin" && "You: "}
-                  {c.lastMessage}
-                </p>
-              )}
-            </div>
-
-          
-            {c.unreadCount > 0 && (
-              <div className="absolute top-4 right-4">
-                <span className="flex h-3 w-3">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500"></span>
-                </span>
-              </div>
-            )}
-          </button>
-        ))}
+            </button>
+          ))
+        )}
       </div>
-
-      {/* Footer info */}
-      {!loading && filteredConvos.length > 0 && (
-        <div className="p-3 border-t bg-gray-50">
-          <p className="text-xs text-gray-500 text-center">
-            {notificationsEnabled ? "🔔" : "🔕"} Notifications {notificationsEnabled ? "enabled" : "disabled"}
-            {" • "}
-            {soundEnabled ? "🔊" : "🔇"} Sound {soundEnabled ? "ready" : "inactive"}
-          </p>
-        </div>
-      )}
     </aside>
   );
 }

@@ -11,10 +11,13 @@ import {
   Save,
   X,
   AlertCircle,
-  Smartphone // Added for the issue icon
+  Smartphone,
+  Calendar,
+  DollarSign,
+  User,
+  MoreHorizontal
 } from "lucide-react";
 
-// 1. Updated Interface: Removed customerName and email
 interface Repair {
   id: string;
   device: string;
@@ -28,7 +31,6 @@ interface Repair {
   notes: string;
 }
 
-// 2. Define the list of possible phone issues
 const REPAIR_ISSUES = [
   "Screen Replacement (LCD/OLED)",
   "Glass Only Replacement",
@@ -57,11 +59,11 @@ export default function AdminRepairs() {
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
 
-  // Form state: Removed customerName and email
+  // Form state
   const [formData, setFormData] = useState({
     device: "",
     phone: "",
-    issue: REPAIR_ISSUES[0], // Default to first issue
+    issue: REPAIR_ISSUES[0], 
     status: "pending",
     priority: "medium",
     cost: "",
@@ -122,8 +124,6 @@ export default function AdminRepairs() {
     }
   };
 
-  // Removed handleDelete function entirely
-
   const handleQuickStatusUpdate = async (id: string, status: string) => {
     try {
       await fetch(`https://api.blackfroglabs.co.za/api/repairs/${id}`, {
@@ -166,7 +166,6 @@ export default function AdminRepairs() {
     });
   };
 
-  // Filter repairs - Updated to remove name search
   const filteredRepairs = repairs.filter((repair) => {
     const matchesSearch =
       repair.device?.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -209,51 +208,52 @@ export default function AdminRepairs() {
       <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-emerald-100/40 via-transparent to-transparent" />
       <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_bottom_left,_var(--tw-gradient-stops))] from-cyan-100/40 via-transparent to-transparent" />
       
-      <div className="relative z-10 p-6 md:p-12 space-y-8">
+      {/* Container: Adjusted padding for mobile (p-4) vs desktop (p-12) */}
+      <div className="relative z-10 p-4 md:p-12 space-y-6 md:space-y-8">
+        
         {/* Header */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-bold text-slate-900 tracking-tight">Repair Dashboard</h1>
-            <p className="text-slate-600 text-lg">Complete control over all device repairs</p>
+            <h1 className="text-2xl md:text-3xl font-bold text-slate-900 tracking-tight">Repair Dashboard</h1>
+            <p className="text-slate-600 text-sm md:text-lg">Control center for device repairs</p>
           </div>
           <button
             onClick={() => setShowAddModal(true)}
-            className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-emerald-500 to-cyan-500 text-white font-semibold rounded-xl hover:shadow-lg hover:shadow-emerald-500/30 hover:scale-105 transition-all"
+            className="flex items-center justify-center gap-2 px-6 py-3 bg-gradient-to-r from-emerald-500 to-cyan-500 text-white font-semibold rounded-xl hover:shadow-lg hover:shadow-emerald-500/30 hover:scale-105 transition-all w-full md:w-auto"
           >
             <Plus size={20} />
-            Add New Repair
+            Add Repair
           </button>
         </div>
 
-        {/* Stats */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <div className="bg-white/80 backdrop-blur-sm border border-slate-200 rounded-2xl p-5 shadow-lg">
-            <p className="text-sm text-slate-600 font-medium mb-1">Total</p>
-            <p className="text-3xl font-bold text-slate-900">{stats.total}</p>
+        {/* Stats Grid - Responsive columns */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
+          <div className="bg-white/80 backdrop-blur-sm border border-slate-200 rounded-xl md:rounded-2xl p-4 md:p-5 shadow-sm md:shadow-lg">
+            <p className="text-xs md:text-sm text-slate-600 font-medium mb-1">Total</p>
+            <p className="text-2xl md:text-3xl font-bold text-slate-900">{stats.total}</p>
           </div>
-          <div className="bg-white/80 backdrop-blur-sm border border-slate-200 rounded-2xl p-5 shadow-lg">
-            <p className="text-sm text-slate-600 font-medium mb-1">Pending</p>
-            <p className="text-3xl font-bold text-yellow-600">{stats.pending}</p>
+          <div className="bg-white/80 backdrop-blur-sm border border-slate-200 rounded-xl md:rounded-2xl p-4 md:p-5 shadow-sm md:shadow-lg">
+            <p className="text-xs md:text-sm text-slate-600 font-medium mb-1">Pending</p>
+            <p className="text-2xl md:text-3xl font-bold text-yellow-600">{stats.pending}</p>
           </div>
-          <div className="bg-white/80 backdrop-blur-sm border border-slate-200 rounded-2xl p-5 shadow-lg">
-            <p className="text-sm text-slate-600 font-medium mb-1">In Progress</p>
-            <p className="text-3xl font-bold text-blue-600">{stats.inProgress}</p>
+          <div className="bg-white/80 backdrop-blur-sm border border-slate-200 rounded-xl md:rounded-2xl p-4 md:p-5 shadow-sm md:shadow-lg">
+            <p className="text-xs md:text-sm text-slate-600 font-medium mb-1">In Progress</p>
+            <p className="text-2xl md:text-3xl font-bold text-blue-600">{stats.inProgress}</p>
           </div>
-          <div className="bg-white/80 backdrop-blur-sm border border-slate-200 rounded-2xl p-5 shadow-lg">
-            <p className="text-sm text-slate-600 font-medium mb-1">Completed</p>
-            <p className="text-3xl font-bold text-green-600">{stats.completed}</p>
+          <div className="bg-white/80 backdrop-blur-sm border border-slate-200 rounded-xl md:rounded-2xl p-4 md:p-5 shadow-sm md:shadow-lg">
+            <p className="text-xs md:text-sm text-slate-600 font-medium mb-1">Completed</p>
+            <p className="text-2xl md:text-3xl font-bold text-green-600">{stats.completed}</p>
           </div>
         </div>
 
         {/* Search and Filter */}
-        <div className="flex flex-col md:flex-row gap-4">
+        <div className="flex flex-col md:flex-row gap-3 md:gap-4">
           <div className="flex-1 relative">
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
             <input
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              // Updated placeholder
-              placeholder="Search by device, phone number, or ID..."
+              placeholder="Search..."
               className="w-full pl-12 pr-4 py-3 rounded-xl border border-slate-300 bg-white text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500 transition-all shadow-sm"
             />
           </div>
@@ -271,107 +271,196 @@ export default function AdminRepairs() {
           </select>
         </div>
 
-        {/* Repairs Table */}
-        <div className="bg-white/80 backdrop-blur-sm border border-slate-200 rounded-2xl shadow-xl overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="bg-slate-50 border-b border-slate-200">
-                <tr>
-                  <th className="px-6 py-4 text-left text-sm font-semibold text-slate-700">Device</th>
-                  {/* Changed Customer column to Phone column */}
-                  <th className="px-6 py-4 text-left text-sm font-semibold text-slate-700">Phone Contact</th>
-                  <th className="px-6 py-4 text-left text-sm font-semibold text-slate-700">Issue</th>
-                  <th className="px-6 py-4 text-left text-sm font-semibold text-slate-700">Status</th>
-                  <th className="px-6 py-4 text-left text-sm font-semibold text-slate-700">Priority</th>
-                  <th className="px-6 py-4 text-left text-sm font-semibold text-slate-700">Cost</th>
-                  <th className="px-6 py-4 text-left text-sm font-semibold text-slate-700">Date</th>
-                  <th className="px-6 py-4 text-right text-sm font-semibold text-slate-700">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-200">
-                {filteredRepairs.length === 0 ? (
-                  <tr>
-                    <td colSpan={8} className="px-6 py-16 text-center">
-                      <AlertCircle className="w-12 h-12 text-slate-400 mx-auto mb-3" />
-                      <p className="text-slate-600 font-medium">No repairs found</p>
-                      <p className="text-sm text-slate-500">Add a new repair to get started</p>
-                    </td>
-                  </tr>
-                ) : (
-                  filteredRepairs.map((repair) => (
-                    <tr key={repair.id} className="hover:bg-slate-50 transition-colors">
-                      <td className="px-6 py-4">
-                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 bg-gradient-to-br from-emerald-500 to-cyan-500 rounded-lg flex items-center justify-center">
-                            <Package className="text-white" size={20} />
+        {/* =============================================
+          RESPONSIVE DATA DISPLAY
+          =============================================
+        */}
+        
+        {filteredRepairs.length === 0 ? (
+           <div className="bg-white/80 backdrop-blur-sm border border-slate-200 rounded-2xl p-12 text-center">
+             <AlertCircle className="w-12 h-12 text-slate-400 mx-auto mb-3" />
+             <p className="text-slate-600 font-medium">No repairs found</p>
+           </div>
+        ) : (
+          <>
+            {/* 1. TABLE VIEW (Desktop Only) - Hidden on Mobile */}
+            <div className="hidden md:block bg-white/80 backdrop-blur-sm border border-slate-200 rounded-2xl shadow-xl overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead className="bg-slate-50 border-b border-slate-200">
+                    <tr>
+                      <th className="px-6 py-4 text-left text-sm font-semibold text-slate-700">Device</th>
+                      <th className="px-6 py-4 text-left text-sm font-semibold text-slate-700">Contact</th>
+                      <th className="px-6 py-4 text-left text-sm font-semibold text-slate-700">Issue</th>
+                      <th className="px-6 py-4 text-left text-sm font-semibold text-slate-700">Status</th>
+                      <th className="px-6 py-4 text-left text-sm font-semibold text-slate-700">Priority</th>
+                      <th className="px-6 py-4 text-left text-sm font-semibold text-slate-700">Cost</th>
+                      <th className="px-6 py-4 text-left text-sm font-semibold text-slate-700">Date</th>
+                      <th className="px-6 py-4 text-right text-sm font-semibold text-slate-700">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-200">
+                    {filteredRepairs.map((repair) => (
+                      <tr key={repair.id} className="hover:bg-slate-50 transition-colors">
+                        <td className="px-6 py-4">
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 bg-gradient-to-br from-emerald-500 to-cyan-500 rounded-lg flex items-center justify-center">
+                              <Package className="text-white" size={20} />
+                            </div>
+                            <div>
+                              <p className="font-semibold text-slate-900">{repair.device}</p>
+                              <p className="text-xs text-slate-500 font-mono">#{repair.id.substring(0,6)}</p>
+                            </div>
                           </div>
-                          <div>
-                            <p className="font-semibold text-slate-900">{repair.device}</p>
-                            <p className="text-xs text-slate-500 font-mono">#{repair.id}</p>
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="flex items-center gap-2 text-slate-600">
+                              <Phone size={14} />
+                              <span className="font-medium">{repair.phone}</span>
                           </div>
+                        </td>
+                        <td className="px-6 py-4">
+                          <p className="text-sm text-slate-700 font-medium truncate max-w-[150px]">{repair.issue}</p>
+                        </td>
+                        <td className="px-6 py-4">
+                          <select
+                            value={repair.status}
+                            onChange={(e) => handleQuickStatusUpdate(repair.id, e.target.value)}
+                            className={`px-3 py-1.5 text-xs font-semibold rounded-lg border ${getStatusColor(repair.status)} cursor-pointer hover:opacity-80 transition-opacity`}
+                          >
+                            <option value="pending">Pending</option>
+                            <option value="in-progress">In Progress</option>
+                            <option value="waiting-parts">Waiting Parts</option>
+                            <option value="ready">Ready</option>
+                            <option value="completed">Completed</option>
+                          </select>
+                        </td>
+                        <td className="px-6 py-4">
+                          <span className={`px-3 py-1.5 text-xs font-semibold rounded-lg border ${getPriorityColor(repair.priority)}`}>
+                            {repair.priority}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4">
+                          <p className="font-semibold text-slate-900">R{repair.cost || "0.00"}</p>
+                        </td>
+                        <td className="px-6 py-4">
+                          <p className="text-sm text-slate-700">{repair.dateReceived}</p>
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="flex items-center justify-end gap-2">
+                            <button
+                              onClick={() => startEdit(repair)}
+                              className="p-2 text-slate-600 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-all"
+                              title="Edit repair"
+                            >
+                              <Edit2 size={18} />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* 2. CARD VIEW (Mobile Only) - Hidden on Desktop */}
+            <div className="md:hidden grid grid-cols-1 gap-4">
+              {filteredRepairs.map((repair) => (
+                <div key={repair.id} className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-4">
+                  
+                  {/* Card Header: Device & Status */}
+                  <div className="flex items-start justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 bg-gradient-to-br from-emerald-500 to-cyan-500 rounded-lg flex items-center justify-center shrink-0">
+                        <Package className="text-white" size={20} />
+                      </div>
+                      <div>
+                        <p className="font-bold text-slate-900">{repair.device}</p>
+                        <p className="text-xs text-slate-500 font-mono">#{repair.id.substring(0,8)}</p>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => startEdit(repair)}
+                      className="p-2 bg-slate-100 text-slate-600 rounded-lg hover:text-emerald-600"
+                    >
+                      <Edit2 size={18} />
+                    </button>
+                  </div>
+
+                  <hr className="border-slate-100" />
+
+                  {/* Card Body: Details */}
+                  <div className="space-y-3">
+                     {/* Issue */}
+                     <div>
+                      <p className="text-xs text-slate-400 uppercase font-bold tracking-wider">Issue</p>
+                      <p className="text-sm font-medium text-slate-800">{repair.issue}</p>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      {/* Contact */}
+                      <div>
+                        <p className="text-xs text-slate-400 uppercase font-bold tracking-wider mb-1">Contact</p>
+                        <div className="flex items-center gap-1 text-slate-700 text-sm">
+                          <Phone size={14} />
+                          {repair.phone}
                         </div>
-                      </td>
-                      <td className="px-6 py-4">
-                         {/* Display only Phone */}
-                        <div className="flex items-center gap-2 text-slate-600">
-                            <Phone size={14} />
-                            <span className="font-medium">{repair.phone}</span>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <p className="text-sm text-slate-700 font-medium">{repair.issue}</p>
-                      </td>
-                      <td className="px-6 py-4">
-                        <select
-                          value={repair.status}
-                          onChange={(e) => handleQuickStatusUpdate(repair.id, e.target.value)}
-                          className={`px-3 py-1.5 text-xs font-semibold rounded-lg border ${getStatusColor(repair.status)} cursor-pointer hover:opacity-80 transition-opacity`}
-                        >
-                          <option value="pending">Pending</option>
-                          <option value="in-progress">In Progress</option>
-                          <option value="waiting-parts">Waiting Parts</option>
-                          <option value="ready">Ready</option>
-                          <option value="completed">Completed</option>
-                        </select>
-                      </td>
-                      <td className="px-6 py-4">
-                        <span className={`px-3 py-1.5 text-xs font-semibold rounded-lg border ${getPriorityColor(repair.priority)}`}>
+                      </div>
+                       {/* Cost */}
+                      <div>
+                        <p className="text-xs text-slate-400 uppercase font-bold tracking-wider mb-1">Cost</p>
+                        <p className="text-sm font-bold text-slate-900">R{repair.cost || "0.00"}</p>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      {/* Priority */}
+                      <div>
+                        <p className="text-xs text-slate-400 uppercase font-bold tracking-wider mb-1">Priority</p>
+                        <span className={`inline-block px-2 py-1 text-xs font-semibold rounded-md border ${getPriorityColor(repair.priority)}`}>
                           {repair.priority}
                         </span>
-                      </td>
-                      <td className="px-6 py-4">
-                        <p className="font-semibold text-slate-900">R{repair.cost || "0.00"}</p>
-                      </td>
-                      <td className="px-6 py-4">
-                        <p className="text-sm text-slate-700">{repair.dateReceived}</p>
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className="flex items-center justify-end gap-2">
-                          <button
-                            onClick={() => startEdit(repair)}
-                            className="p-2 text-slate-600 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-all"
-                            title="Edit repair"
-                          >
-                            <Edit2 size={18} />
-                          </button>
-                          {/* Removed Delete Button */}
+                      </div>
+                       {/* Date */}
+                       <div>
+                        <p className="text-xs text-slate-400 uppercase font-bold tracking-wider mb-1">Date</p>
+                        <div className="flex items-center gap-1 text-slate-700 text-sm">
+                          <Calendar size={14} />
+                          {repair.dateReceived}
                         </div>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Card Footer: Status Dropdown */}
+                  <div className="pt-2">
+                    <p className="text-xs text-slate-400 uppercase font-bold tracking-wider mb-1">Update Status</p>
+                    <select
+                      value={repair.status}
+                      onChange={(e) => handleQuickStatusUpdate(repair.id, e.target.value)}
+                      className={`w-full px-3 py-2 text-sm font-semibold rounded-lg border ${getStatusColor(repair.status)} cursor-pointer`}
+                    >
+                      <option value="pending">Pending</option>
+                      <option value="in-progress">In Progress</option>
+                      <option value="waiting-parts">Waiting Parts</option>
+                      <option value="ready">Ready</option>
+                      <option value="completed">Completed</option>
+                    </select>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
       </div>
 
       {/* Add/Edit Modal */}
       {(showAddModal || editingId) && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-y-auto">
-            <div className="sticky top-0 bg-white border-b border-slate-200 px-8 py-6 flex items-center justify-between rounded-t-3xl z-10">
-              <h2 className="text-2xl font-bold text-slate-900">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-y-auto">
+            <div className="sticky top-0 bg-white border-b border-slate-200 px-6 md:px-8 py-6 flex items-center justify-between z-10">
+              <h2 className="text-xl md:text-2xl font-bold text-slate-900">
                 {editingId ? "Edit Repair" : "Add New Repair"}
               </h2>
               <button
@@ -386,7 +475,7 @@ export default function AdminRepairs() {
               </button>
             </div>
 
-            <div className="p-8 space-y-6">
+            <div className="p-6 md:p-8 space-y-6">
               {/* Device & Contact Info */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
@@ -414,7 +503,6 @@ export default function AdminRepairs() {
                     className="w-full px-4 py-3 rounded-xl border border-slate-300 bg-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all"
                   />
                 </div>
-                {/* Removed Name and Email inputs */}
               </div>
 
               {/* Issue Selection Dropdown */}
@@ -526,7 +614,6 @@ export default function AdminRepairs() {
                 >
                   Cancel
                 </button>
-                {/* Updated disabled logic to match new required fields */}
                 <button
                   onClick={() => editingId ? handleUpdateRepair(editingId) : handleAddRepair()}
                   disabled={loading || !formData.device || !formData.phone || !formData.issue}
@@ -552,4 +639,3 @@ export default function AdminRepairs() {
     </main>
   );
 }
-

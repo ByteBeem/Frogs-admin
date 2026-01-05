@@ -5,23 +5,20 @@ import {
   Loader2, 
   Package, 
   Plus, 
-  Trash2, 
   Search,
   Phone,
-  Mail,
-  User,
   Edit2,
   Save,
   X,
   AlertCircle,
+  Smartphone // Added for the issue icon
 } from "lucide-react";
 
+// 1. Updated Interface: Removed customerName and email
 interface Repair {
   id: string;
   device: string;
-  customerName: string;
   phone: string;
-  email: string;
   issue: string;
   status: string;
   priority: string;
@@ -31,6 +28,27 @@ interface Repair {
   notes: string;
 }
 
+// 2. Define the list of possible phone issues
+const REPAIR_ISSUES = [
+  "Screen Replacement (LCD/OLED)",
+  "Glass Only Replacement",
+  "Battery Replacement",
+  "Charging Port Repair",
+  "Water/Liquid Damage Treatment",
+  "Back Glass Replacement",
+  "Camera Lens Replacement",
+  "Front Camera Repair",
+  "Rear Camera Repair",
+  "Earpiece/Speaker Repair",
+  "Microphone Repair",
+  "Face ID / Touch ID Repair",
+  "Software Issue / Boot Loop",
+  "Data Recovery",
+  "Motherboard Repair",
+  "Housing/Frame Replacement",
+  "Diagnosis / Inspection"
+];
+
 export default function AdminRepairs() {
   const [repairs, setRepairs] = useState<Repair[]>([]);
   const [loading, setLoading] = useState(false);
@@ -39,13 +57,11 @@ export default function AdminRepairs() {
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
 
-  // Form state
+  // Form state: Removed customerName and email
   const [formData, setFormData] = useState({
     device: "",
-    customerName: "",
     phone: "",
-    email: "",
-    issue: "",
+    issue: REPAIR_ISSUES[0], // Default to first issue
     status: "pending",
     priority: "medium",
     cost: "",
@@ -106,15 +122,7 @@ export default function AdminRepairs() {
     }
   };
 
-  const handleDelete = async (id: string) => {
-    if (!confirm("Are you sure you want to delete this repair?")) return;
-    try {
-      await fetch(`https://api.blackfroglabs.co.za/api/repairs/${id}`, { method: "DELETE" });
-      fetchRepairs();
-    } catch (err) {
-      console.error(err);
-    }
-  };
+  // Removed handleDelete function entirely
 
   const handleQuickStatusUpdate = async (id: string, status: string) => {
     try {
@@ -133,9 +141,7 @@ export default function AdminRepairs() {
     setEditingId(repair.id);
     setFormData({
       device: repair.device,
-      customerName: repair.customerName,
       phone: repair.phone,
-      email: repair.email,
       issue: repair.issue,
       status: repair.status,
       priority: repair.priority,
@@ -149,10 +155,8 @@ export default function AdminRepairs() {
   const resetForm = () => {
     setFormData({
       device: "",
-      customerName: "",
       phone: "",
-      email: "",
-      issue: "",
+      issue: REPAIR_ISSUES[0],
       status: "pending",
       priority: "medium",
       cost: "",
@@ -162,11 +166,10 @@ export default function AdminRepairs() {
     });
   };
 
-  // Filter repairs
+  // Filter repairs - Updated to remove name search
   const filteredRepairs = repairs.filter((repair) => {
     const matchesSearch =
       repair.device?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      repair.customerName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
       repair.phone?.includes(searchQuery) ||
       repair.id?.toLowerCase().includes(searchQuery.toLowerCase());
     
@@ -210,7 +213,7 @@ export default function AdminRepairs() {
         {/* Header */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
-           
+            <h1 className="text-3xl font-bold text-slate-900 tracking-tight">Repair Dashboard</h1>
             <p className="text-slate-600 text-lg">Complete control over all device repairs</p>
           </div>
           <button
@@ -249,7 +252,8 @@ export default function AdminRepairs() {
             <input
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search by device, customer, phone, or ID..."
+              // Updated placeholder
+              placeholder="Search by device, phone number, or ID..."
               className="w-full pl-12 pr-4 py-3 rounded-xl border border-slate-300 bg-white text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500 transition-all shadow-sm"
             />
           </div>
@@ -274,7 +278,8 @@ export default function AdminRepairs() {
               <thead className="bg-slate-50 border-b border-slate-200">
                 <tr>
                   <th className="px-6 py-4 text-left text-sm font-semibold text-slate-700">Device</th>
-                  <th className="px-6 py-4 text-left text-sm font-semibold text-slate-700">Customer</th>
+                  {/* Changed Customer column to Phone column */}
+                  <th className="px-6 py-4 text-left text-sm font-semibold text-slate-700">Phone Contact</th>
                   <th className="px-6 py-4 text-left text-sm font-semibold text-slate-700">Issue</th>
                   <th className="px-6 py-4 text-left text-sm font-semibold text-slate-700">Status</th>
                   <th className="px-6 py-4 text-left text-sm font-semibold text-slate-700">Priority</th>
@@ -307,11 +312,14 @@ export default function AdminRepairs() {
                         </div>
                       </td>
                       <td className="px-6 py-4">
-                        <p className="font-medium text-slate-900">{repair.customerName}</p>
-                        <p className="text-sm text-slate-600">{repair.phone}</p>
+                         {/* Display only Phone */}
+                        <div className="flex items-center gap-2 text-slate-600">
+                            <Phone size={14} />
+                            <span className="font-medium">{repair.phone}</span>
+                        </div>
                       </td>
                       <td className="px-6 py-4">
-                        <p className="text-sm text-slate-700 max-w-xs truncate">{repair.issue}</p>
+                        <p className="text-sm text-slate-700 font-medium">{repair.issue}</p>
                       </td>
                       <td className="px-6 py-4">
                         <select
@@ -332,7 +340,7 @@ export default function AdminRepairs() {
                         </span>
                       </td>
                       <td className="px-6 py-4">
-                        <p className="font-semibold text-slate-900">R{repair.cost || "50"}</p>
+                        <p className="font-semibold text-slate-900">R{repair.cost || "0.00"}</p>
                       </td>
                       <td className="px-6 py-4">
                         <p className="text-sm text-slate-700">{repair.dateReceived}</p>
@@ -346,13 +354,7 @@ export default function AdminRepairs() {
                           >
                             <Edit2 size={18} />
                           </button>
-                          <button
-                            onClick={() => handleDelete(repair.id)}
-                            className="p-2 text-slate-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
-                            title="Delete repair"
-                          >
-                            <Trash2 size={18} />
-                          </button>
+                          {/* Removed Delete Button */}
                         </div>
                       </td>
                     </tr>
@@ -385,7 +387,7 @@ export default function AdminRepairs() {
             </div>
 
             <div className="p-8 space-y-6">
-              {/* Device & Customer Info */}
+              {/* Device & Contact Info */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <label className="text-sm font-semibold text-slate-700 flex items-center gap-2">
@@ -402,19 +404,6 @@ export default function AdminRepairs() {
 
                 <div className="space-y-2">
                   <label className="text-sm font-semibold text-slate-700 flex items-center gap-2">
-                    <User size={16} className="text-cyan-600" />
-                    Customer Name *
-                  </label>
-                  <input
-                    value={formData.customerName}
-                    onChange={(e) => setFormData({ ...formData, customerName: e.target.value })}
-                    placeholder="e.g., John Doe"
-                    className="w-full px-4 py-3 rounded-xl border border-slate-300 bg-white focus:ring-2 focus:ring-cyan-500 focus:border-transparent transition-all"
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <label className="text-sm font-semibold text-slate-700 flex items-center gap-2">
                     <Phone size={16} className="text-emerald-600" />
                     Phone Number *
                   </label>
@@ -425,32 +414,26 @@ export default function AdminRepairs() {
                     className="w-full px-4 py-3 rounded-xl border border-slate-300 bg-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all"
                   />
                 </div>
-
-                <div className="space-y-2">
-                  <label className="text-sm font-semibold text-slate-700 flex items-center gap-2">
-                    <Mail size={16} className="text-cyan-600" />
-                    Email
-                  </label>
-                  <input
-                    value={formData.email}
-                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                    placeholder="customer@example.com"
-                    type="email"
-                    className="w-full px-4 py-3 rounded-xl border border-slate-300 bg-white focus:ring-2 focus:ring-cyan-500 focus:border-transparent transition-all"
-                  />
-                </div>
+                {/* Removed Name and Email inputs */}
               </div>
 
-              {/* Issue Description */}
+              {/* Issue Selection Dropdown */}
               <div className="space-y-2">
-                <label className="text-sm font-semibold text-slate-700">Issue Description *</label>
-                <textarea
+                <label className="text-sm font-semibold text-slate-700 flex items-center gap-2">
+                    <Smartphone size={16} className="text-blue-600" />
+                    Issue Category *
+                </label>
+                <select
                   value={formData.issue}
                   onChange={(e) => setFormData({ ...formData, issue: e.target.value })}
-                  placeholder="Describe the issue in detail..."
-                  rows={3}
-                  className="w-full px-4 py-3 rounded-xl border border-slate-300 bg-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all resize-none"
-                />
+                  className="w-full px-4 py-3 rounded-xl border border-slate-300 bg-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all appearance-none"
+                >
+                  {REPAIR_ISSUES.map((issue) => (
+                    <option key={issue} value={issue}>
+                      {issue}
+                    </option>
+                  ))}
+                </select>
               </div>
 
               {/* Status & Priority */}
@@ -543,9 +526,10 @@ export default function AdminRepairs() {
                 >
                   Cancel
                 </button>
+                {/* Updated disabled logic to match new required fields */}
                 <button
                   onClick={() => editingId ? handleUpdateRepair(editingId) : handleAddRepair()}
-                  disabled={loading || !formData.device || !formData.customerName || !formData.phone || !formData.issue}
+                  disabled={loading || !formData.device || !formData.phone || !formData.issue}
                   className="flex-1 px-6 py-3 bg-gradient-to-r from-emerald-500 to-cyan-500 text-white font-semibold rounded-xl hover:shadow-lg hover:shadow-emerald-500/30 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2"
                 >
                   {loading ? (
@@ -568,3 +552,4 @@ export default function AdminRepairs() {
     </main>
   );
 }
+

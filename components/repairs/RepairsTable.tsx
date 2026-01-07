@@ -3,23 +3,24 @@
 import { useState, useEffect } from "react";
 import { 
   Loader2, 
-  Package, 
   Plus, 
   Search,
-  Phone,
   Edit2,
   Save,
   X,
-  AlertCircle,
   Smartphone,
-  Calendar,
-  DollarSign,
   User,
-  MoreHorizontal
+  CheckCircle2,
+  ClipboardList,
+  CalendarClock,
+  Trash2
 } from "lucide-react";
+
+// --- Types & Constants ---
 
 interface Repair {
   id: string;
+  customerName: string;
   device: string;
   phone: string;
   issue: string;
@@ -32,24 +33,45 @@ interface Repair {
 }
 
 const REPAIR_ISSUES = [
-  "Screen Replacement (LCD/OLED)",
-  "Glass Only Replacement",
+  "Screen Replacement",
   "Battery Replacement",
   "Charging Port Repair",
   "Water/Liquid Damage Treatment",
   "Back Glass Replacement",
-  "Camera Lens Replacement",
-  "Front Camera Repair",
-  "Rear Camera Repair",
-  "Earpiece/Speaker Repair",
-  "Microphone Repair",
-  "Face ID / Touch ID Repair",
+  "Camera Repair (Front/Rear)",
+  "Speaker/Mic Repair",
   "Software Issue / Boot Loop",
-  "Data Recovery",
   "Motherboard Repair",
-  "Housing/Frame Replacement",
   "Diagnosis / Inspection"
 ];
+
+// Mapping issues to specific checklist items
+const ISSUE_CHECKLISTS: Record<string, string[]> = {
+  "Battery Replacement": [
+    "Screen Working",
+    "Charging Port working",
+    "Device Powers On",
+    "Everything works"
+  ],
+  "Screen Replacement": [
+    "Charging Port Working",
+    "Battery Works",
+    "Device Powers On",
+    "Everything Works"
+  ],
+  "Charging Port Repair": [
+    "Microphone Working",
+    "Speaker Working",
+    "Screen Works",
+    "Battery Works"
+  ],
+  "default": [
+    "Device Powers On",
+    "Screen Works",
+    "Charging Block Works",
+    "Everything Works"
+  ]
+};
 
 export default function AdminRepairs() {
   const [repairs, setRepairs] = useState<Repair[]>([]);
@@ -59,8 +81,9 @@ export default function AdminRepairs() {
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
 
-  // Form state
+  // Form State
   const [formData, setFormData] = useState({
+    customerName: "",
     device: "",
     phone: "",
     issue: REPAIR_ISSUES[0], 
@@ -71,6 +94,9 @@ export default function AdminRepairs() {
     estimatedCompletion: "",
     notes: "",
   });
+
+  // Dynamic Checklist State
+  const [activeChecklist, setActiveChecklist] = useState<Record<string, boolean>>({});
 
   const fetchRepairs = async () => {
     try {
@@ -86,20 +112,46 @@ export default function AdminRepairs() {
     fetchRepairs();
   }, []);
 
+  // Update checklist options when Issue changes
+  useEffect(() => {
+    const template = ISSUE_CHECKLISTS[formData.issue] || ISSUE_CHECKLISTS["default"];
+    const newChecklist: Record<string, boolean> = {};
+    template.forEach(item => {
+      newChecklist[item] = false; 
+    });
+    setActiveChecklist(newChecklist);
+  }, [formData.issue]);
+
+  // Handle Checklist Toggles
+  const toggleChecklist = (item: string) => {
+    setActiveChecklist(prev => ({ ...prev, [item]: !prev[item] }));
+  };
+
   const handleAddRepair = async () => {
     setLoading(true);
+    
+    // Append checklist to notes
+    const checklistSummary = Object.entries(activeChecklist)
+      .map(([k, v]) => `${k}: ${v ? 'PASS' : 'FAIL'}`)
+      .join(' | ');
+    
+    const finalData = {
+      ...formData,
+      notes: `[INSPECTION: ${checklistSummary}]\n${formData.notes}`
+    };
+
     try {
       const res = await fetch("https://api.blackfroglabs.co.za/api/repairs", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(formData),
+        body: JSON.stringify(finalData),
       });
       if (!res.ok) throw new Error("Failed to add repair");
-      resetForm();
-      setShowAddModal(false);
+      closeModal();
       fetchRepairs();
     } catch (err) {
       console.error(err);
+      alert("Error adding repair. Check console.");
     } finally {
       setLoading(false);
     }
@@ -114,32 +166,38 @@ export default function AdminRepairs() {
         body: JSON.stringify(formData),
       });
       if (!res.ok) throw new Error("Failed to update repair");
-      setEditingId(null);
-      resetForm();
+      closeModal();
       fetchRepairs();
     } catch (err) {
       console.error(err);
+      alert("Error updating repair.");
     } finally {
       setLoading(false);
     }
   };
 
   const handleQuickStatusUpdate = async (id: string, status: string) => {
+    // Optimistic UI Update (Instant change before server responds)
+    setRepairs(prev => prev.map(r => r.id === id ? { ...r, status } : r));
+    
     try {
       await fetch(`https://api.blackfroglabs.co.za/api/repairs/${id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ status }),
       });
-      fetchRepairs();
+      // We don't need to refetch here if we trust the optimistic update, 
+      // but refetching ensures data consistency.
     } catch (err) {
       console.error(err);
+      fetchRepairs(); // Revert on error
     }
   };
 
   const startEdit = (repair: Repair) => {
     setEditingId(repair.id);
     setFormData({
+      customerName: repair.customerName || "",
       device: repair.device,
       phone: repair.phone,
       issue: repair.issue,
@@ -150,10 +208,14 @@ export default function AdminRepairs() {
       estimatedCompletion: repair.estimatedCompletion,
       notes: repair.notes,
     });
+    setShowAddModal(true);
   };
 
-  const resetForm = () => {
+  const closeModal = () => {
+    setShowAddModal(false);
+    setEditingId(null);
     setFormData({
+      customerName: "",
       device: "",
       phone: "",
       issue: REPAIR_ISSUES[0],
@@ -167,471 +229,372 @@ export default function AdminRepairs() {
   };
 
   const filteredRepairs = repairs.filter((repair) => {
+    const searchLower = searchQuery.toLowerCase();
     const matchesSearch =
-      repair.device?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      repair.device?.toLowerCase().includes(searchLower) ||
+      repair.customerName?.toLowerCase().includes(searchLower) ||
       repair.phone?.includes(searchQuery) ||
-      repair.id?.toLowerCase().includes(searchQuery.toLowerCase());
+      repair.id?.toLowerCase().includes(searchLower);
     
     if (filterStatus === "all") return matchesSearch;
     return matchesSearch && repair.status === filterStatus;
   });
 
-  const getStatusColor = (status: string) => {
+  // --- STYLING HELPERS ---
+  const getStatusStyle = (status: string) => {
     switch (status) {
-      case "pending": return "bg-yellow-100 text-yellow-700 border-yellow-200";
-      case "in-progress": return "bg-blue-100 text-blue-700 border-blue-200";
-      case "completed": return "bg-green-100 text-green-700 border-green-200";
-      case "waiting-parts": return "bg-purple-100 text-purple-700 border-purple-200";
-      case "ready": return "bg-emerald-100 text-emerald-700 border-emerald-200";
-      default: return "bg-slate-100 text-slate-700 border-slate-200";
+      case "pending": return "bg-yellow-50 text-yellow-700 border-yellow-200";
+      case "in-progress": return "bg-blue-50 text-blue-700 border-blue-200";
+      case "waiting-parts": return "bg-purple-50 text-purple-700 border-purple-200";
+      case "ready": return "bg-emerald-50 text-emerald-700 border-emerald-200";
+      case "completed": return "bg-slate-50 text-slate-500 border-slate-200 line-through decoration-slate-400";
+      default: return "bg-gray-50 text-gray-600";
     }
   };
 
-  const getPriorityColor = (priority: string) => {
+  const getPriorityDot = (priority: string) => {
     switch (priority) {
-      case "high": return "bg-red-100 text-red-700 border-red-200";
-      case "medium": return "bg-orange-100 text-orange-700 border-orange-200";
-      case "low": return "bg-slate-100 text-slate-700 border-slate-200";
-      default: return "bg-slate-100 text-slate-700 border-slate-200";
+      case "high": return "bg-red-500";
+      case "medium": return "bg-orange-400";
+      default: return "bg-slate-300";
     }
-  };
-
-  const stats = {
-    total: repairs.length,
-    pending: repairs.filter((r) => r.status === "pending").length,
-    inProgress: repairs.filter((r) => r.status === "in-progress").length,
-    completed: repairs.filter((r) => r.status === "completed").length,
   };
 
   return (
-    <main className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-50">
-      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-emerald-100/40 via-transparent to-transparent" />
-      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_bottom_left,_var(--tw-gradient-stops))] from-cyan-100/40 via-transparent to-transparent" />
+    <main className="min-h-screen bg-white p-2 md:p-6 text-slate-900 font-sans">
       
-      {/* Container: Adjusted padding for mobile (p-4) vs desktop (p-12) */}
-      <div className="relative z-10 p-4 md:p-12 space-y-6 md:space-y-8">
+      {/* --- Top Bar --- */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 mb-2 border-b border-slate-200 pb-3">
+        <div className="flex items-center gap-4">
+          <h1 className="text-lg font-bold text-slate-800 tracking-tight">Repairs</h1>
+          {/* Quick Filters */}
+          <div className="flex gap-1 overflow-x-auto no-scrollbar">
+             {["all", "pending", "in-progress", "waiting-parts", "ready", "completed"].map((st) => (
+              <button
+                key={st}
+                onClick={() => setFilterStatus(st)}
+                className={`whitespace-nowrap text-[10px] uppercase font-bold px-2 py-1 rounded border transition-all ${
+                  filterStatus === st 
+                  ? "bg-slate-800 text-white border-slate-800" 
+                  : "bg-white text-slate-500 border-slate-200 hover:border-slate-300"
+                }`}
+              >
+                {st.replace("-", " ")}
+              </button>
+            ))}
+          </div>
+        </div>
         
-        {/* Header */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div>
-            <h1 className="text-2xl md:text-3xl font-bold text-slate-900 tracking-tight">Repair Dashboard</h1>
-            <p className="text-slate-600 text-sm md:text-lg">Control center for device repairs</p>
-          </div>
-          <button
-            onClick={() => setShowAddModal(true)}
-            className="flex items-center justify-center gap-2 px-6 py-3 bg-gradient-to-r from-emerald-500 to-cyan-500 text-white font-semibold rounded-xl hover:shadow-lg hover:shadow-emerald-500/30 hover:scale-105 transition-all w-full md:w-auto"
-          >
-            <Plus size={20} />
-            Add Repair
-          </button>
-        </div>
-
-        {/* Stats Grid - Responsive columns */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
-          <div className="bg-white/80 backdrop-blur-sm border border-slate-200 rounded-xl md:rounded-2xl p-4 md:p-5 shadow-sm md:shadow-lg">
-            <p className="text-xs md:text-sm text-slate-600 font-medium mb-1">Total</p>
-            <p className="text-2xl md:text-3xl font-bold text-slate-900">{stats.total}</p>
-          </div>
-          <div className="bg-white/80 backdrop-blur-sm border border-slate-200 rounded-xl md:rounded-2xl p-4 md:p-5 shadow-sm md:shadow-lg">
-            <p className="text-xs md:text-sm text-slate-600 font-medium mb-1">Pending</p>
-            <p className="text-2xl md:text-3xl font-bold text-yellow-600">{stats.pending}</p>
-          </div>
-          <div className="bg-white/80 backdrop-blur-sm border border-slate-200 rounded-xl md:rounded-2xl p-4 md:p-5 shadow-sm md:shadow-lg">
-            <p className="text-xs md:text-sm text-slate-600 font-medium mb-1">In Progress</p>
-            <p className="text-2xl md:text-3xl font-bold text-blue-600">{stats.inProgress}</p>
-          </div>
-          <div className="bg-white/80 backdrop-blur-sm border border-slate-200 rounded-xl md:rounded-2xl p-4 md:p-5 shadow-sm md:shadow-lg">
-            <p className="text-xs md:text-sm text-slate-600 font-medium mb-1">Completed</p>
-            <p className="text-2xl md:text-3xl font-bold text-green-600">{stats.completed}</p>
-          </div>
-        </div>
-
-        {/* Search and Filter */}
-        <div className="flex flex-col md:flex-row gap-3 md:gap-4">
-          <div className="flex-1 relative">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
+        <div className="flex gap-2 w-full md:w-auto">
+          <div className="relative flex-1 md:w-48">
+            <Search className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
             <input
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search..."
-              className="w-full pl-12 pr-4 py-3 rounded-xl border border-slate-300 bg-white text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500 transition-all shadow-sm"
+              className="w-full pl-8 pr-2 py-1.5 text-xs rounded border border-slate-300 focus:ring-1 focus:ring-blue-500 outline-none"
             />
           </div>
-          <select
-            value={filterStatus}
-            onChange={(e) => setFilterStatus(e.target.value)}
-            className="px-4 py-3 rounded-xl border border-slate-300 bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-cyan-500 transition-all shadow-sm"
+          <button
+            onClick={() => { closeModal(); setShowAddModal(true); }}
+            className="flex items-center gap-1 px-3 py-1.5 bg-blue-600 text-white text-xs font-bold uppercase rounded hover:bg-blue-700 transition-colors shadow-sm whitespace-nowrap"
           >
-            <option value="all">All Status</option>
-            <option value="pending">Pending</option>
-            <option value="in-progress">In Progress</option>
-            <option value="waiting-parts">Waiting Parts</option>
-            <option value="ready">Ready</option>
-            <option value="completed">Completed</option>
-          </select>
+            <Plus size={14} /> New
+          </button>
         </div>
+      </div>
 
-        {/* =============================================
-          RESPONSIVE DATA DISPLAY
-          =============================================
-        */}
-        
-        {filteredRepairs.length === 0 ? (
-           <div className="bg-white/80 backdrop-blur-sm border border-slate-200 rounded-2xl p-12 text-center">
-             <AlertCircle className="w-12 h-12 text-slate-400 mx-auto mb-3" />
-             <p className="text-slate-600 font-medium">No repairs found</p>
-           </div>
-        ) : (
-          <>
-            {/* 1. TABLE VIEW (Desktop Only) - Hidden on Mobile */}
-            <div className="hidden md:block bg-white/80 backdrop-blur-sm border border-slate-200 rounded-2xl shadow-xl overflow-hidden">
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead className="bg-slate-50 border-b border-slate-200">
-                    <tr>
-                      <th className="px-6 py-4 text-left text-sm font-semibold text-slate-700">Device</th>
-                      <th className="px-6 py-4 text-left text-sm font-semibold text-slate-700">Contact</th>
-                      <th className="px-6 py-4 text-left text-sm font-semibold text-slate-700">Issue</th>
-                      <th className="px-6 py-4 text-left text-sm font-semibold text-slate-700">Status</th>
-                      <th className="px-6 py-4 text-left text-sm font-semibold text-slate-700">Priority</th>
-                      <th className="px-6 py-4 text-left text-sm font-semibold text-slate-700">Cost</th>
-                      <th className="px-6 py-4 text-left text-sm font-semibold text-slate-700">Date</th>
-                      <th className="px-6 py-4 text-right text-sm font-semibold text-slate-700">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-200">
-                    {filteredRepairs.map((repair) => (
-                      <tr key={repair.id} className="hover:bg-slate-50 transition-colors">
-                        <td className="px-6 py-4">
-                          <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 bg-gradient-to-br from-emerald-500 to-cyan-500 rounded-lg flex items-center justify-center">
-                              <Package className="text-white" size={20} />
-                            </div>
-                            <div>
-                              <p className="font-semibold text-slate-900">{repair.device}</p>
-                              <p className="text-xs text-slate-500 font-mono">#{repair.id.substring(0,6)}</p>
-                            </div>
-                          </div>
-                        </td>
-                        <td className="px-6 py-4">
-                          <div className="flex items-center gap-2 text-slate-600">
-                              <Phone size={14} />
-                              <span className="font-medium">{repair.phone}</span>
-                          </div>
-                        </td>
-                        <td className="px-6 py-4">
-                          <p className="text-sm text-slate-700 font-medium truncate max-w-[150px]">{repair.issue}</p>
-                        </td>
-                        <td className="px-6 py-4">
-                          <select
-                            value={repair.status}
-                            onChange={(e) => handleQuickStatusUpdate(repair.id, e.target.value)}
-                            className={`px-3 py-1.5 text-xs font-semibold rounded-lg border ${getStatusColor(repair.status)} cursor-pointer hover:opacity-80 transition-opacity`}
-                          >
-                            <option value="pending">Pending</option>
-                            <option value="in-progress">In Progress</option>
-                            <option value="waiting-parts">Waiting Parts</option>
-                            <option value="ready">Ready</option>
-                            <option value="completed">Completed</option>
-                          </select>
-                        </td>
-                        <td className="px-6 py-4">
-                          <span className={`px-3 py-1.5 text-xs font-semibold rounded-lg border ${getPriorityColor(repair.priority)}`}>
-                            {repair.priority}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4">
-                          <p className="font-semibold text-slate-900">R{repair.cost || "0.00"}</p>
-                        </td>
-                        <td className="px-6 py-4">
-                          <p className="text-sm text-slate-700">{repair.dateReceived}</p>
-                        </td>
-                        <td className="px-6 py-4">
-                          <div className="flex items-center justify-end gap-2">
-                            <button
-                              onClick={() => startEdit(repair)}
-                              className="p-2 text-slate-600 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-all"
-                              title="Edit repair"
-                            >
-                              <Edit2 size={18} />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
+      {/* --- DESKTOP TABLE (High Density) --- */}
+      <div className="hidden md:block overflow-hidden border border-slate-200 rounded-md">
+        <table className="w-full text-left border-collapse">
+          <thead className="bg-slate-50 text-slate-500">
+            <tr>
+              <th className="px-2 py-2 text-[10px] font-bold uppercase tracking-wider border-b border-r border-slate-200 w-14 text-center">ID</th>
+              <th className="px-2 py-2 text-[10px] font-bold uppercase tracking-wider border-b border-slate-200 w-40">Customer</th>
+              <th className="px-2 py-2 text-[10px] font-bold uppercase tracking-wider border-b border-slate-200 w-40">Device</th>
+              <th className="px-2 py-2 text-[10px] font-bold uppercase tracking-wider border-b border-slate-200">Issue</th>
+              <th className="px-2 py-2 text-[10px] font-bold uppercase tracking-wider border-b border-slate-200 w-24">Finish</th>
+              <th className="px-2 py-2 text-[10px] font-bold uppercase tracking-wider border-b border-slate-200 w-28">Status</th>
+              <th className="px-2 py-2 text-[10px] font-bold uppercase tracking-wider border-b border-slate-200 w-20 text-right">Cost</th>
+              <th className="px-2 py-2 text-[10px] font-bold uppercase tracking-wider border-b border-slate-200 w-12 text-center">Act</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100 bg-white">
+            {filteredRepairs.map((repair) => (
+              <tr key={repair.id} className="hover:bg-blue-50/40 group transition-colors">
+                
+                {/* ID */}
+                <td className="px-2 py-1 text-[11px] text-slate-400 font-mono text-center border-r border-slate-100">
+                  {repair.id.slice(-4)}
+                </td>
 
-            {/* 2. CARD VIEW (Mobile Only) - Hidden on Desktop */}
-            <div className="md:hidden grid grid-cols-1 gap-4">
-              {filteredRepairs.map((repair) => (
-                <div key={repair.id} className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-4">
-                  
-                  {/* Card Header: Device & Status */}
-                  <div className="flex items-start justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 bg-gradient-to-br from-emerald-500 to-cyan-500 rounded-lg flex items-center justify-center shrink-0">
-                        <Package className="text-white" size={20} />
-                      </div>
-                      <div>
-                        <p className="font-bold text-slate-900">{repair.device}</p>
-                        <p className="text-xs text-slate-500 font-mono">#{repair.id.substring(0,8)}</p>
-                      </div>
-                    </div>
-                    <button
-                      onClick={() => startEdit(repair)}
-                      className="p-2 bg-slate-100 text-slate-600 rounded-lg hover:text-emerald-600"
-                    >
-                      <Edit2 size={18} />
-                    </button>
+                {/* Customer */}
+                <td className="px-2 py-1">
+                  <div className="flex flex-col leading-tight">
+                    <span className="text-[11px] font-bold text-slate-800 truncate block max-w-[150px]">
+                      {repair.customerName || "Walk-in"}
+                    </span>
+                    <span className="text-[10px] text-slate-400 truncate block max-w-[150px]">
+                      {repair.phone}
+                    </span>
                   </div>
+                </td>
 
-                  <hr className="border-slate-100" />
+                {/* Device */}
+                <td className="px-2 py-1 text-[11px] text-slate-700 font-medium truncate max-w-[150px]">
+                  {repair.device}
+                </td>
 
-                  {/* Card Body: Details */}
-                  <div className="space-y-3">
-                     {/* Issue */}
-                     <div>
-                      <p className="text-xs text-slate-400 uppercase font-bold tracking-wider">Issue</p>
-                      <p className="text-sm font-medium text-slate-800">{repair.issue}</p>
-                    </div>
+                {/* Issue */}
+                <td className="px-2 py-1 text-[11px] text-slate-600 truncate max-w-[200px]" title={repair.issue}>
+                  {repair.issue}
+                </td>
 
-                    <div className="grid grid-cols-2 gap-4">
-                      {/* Contact */}
-                      <div>
-                        <p className="text-xs text-slate-400 uppercase font-bold tracking-wider mb-1">Contact</p>
-                        <div className="flex items-center gap-1 text-slate-700 text-sm">
-                          <Phone size={14} />
-                          {repair.phone}
-                        </div>
-                      </div>
-                       {/* Cost */}
-                      <div>
-                        <p className="text-xs text-slate-400 uppercase font-bold tracking-wider mb-1">Cost</p>
-                        <p className="text-sm font-bold text-slate-900">R{repair.cost || "0.00"}</p>
-                      </div>
-                    </div>
+                 {/* Est Completion */}
+                 <td className="px-2 py-1">
+                  {repair.estimatedCompletion ? (
+                     <div className="flex items-center gap-1 text-[10px] text-slate-600">
+                       <CalendarClock size={10} className="text-slate-400"/>
+                       {repair.estimatedCompletion}
+                     </div>
+                  ) : (
+                    <span className="text-[10px] text-slate-300">-</span>
+                  )}
+                </td>
 
-                    <div className="grid grid-cols-2 gap-4">
-                      {/* Priority */}
-                      <div>
-                        <p className="text-xs text-slate-400 uppercase font-bold tracking-wider mb-1">Priority</p>
-                        <span className={`inline-block px-2 py-1 text-xs font-semibold rounded-md border ${getPriorityColor(repair.priority)}`}>
-                          {repair.priority}
-                        </span>
-                      </div>
-                       {/* Date */}
-                       <div>
-                        <p className="text-xs text-slate-400 uppercase font-bold tracking-wider mb-1">Date</p>
-                        <div className="flex items-center gap-1 text-slate-700 text-sm">
-                          <Calendar size={14} />
-                          {repair.dateReceived}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
+                {/* Status Dropdown */}
+                <td className="px-2 py-1">
+                   <div className="flex items-center gap-1.5">
+                      <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${getPriorityDot(repair.priority)}`} />
+                      <select
+                        value={repair.status}
+                        onChange={(e) => handleQuickStatusUpdate(repair.id, e.target.value)}
+                        className={`
+                          appearance-none w-full text-[10px] font-bold uppercase py-0.5 px-2 rounded 
+                          border ${getStatusStyle(repair.status)} 
+                          cursor-pointer focus:outline-none focus:ring-1 focus:ring-blue-500
+                        `}
+                      >
+                        <option value="pending">Pending</option>
+                        <option value="in-progress">Working</option>
+                        <option value="waiting-parts">Parts</option>
+                        <option value="ready">Ready</option>
+                        <option value="completed">Done</option>
+                      </select>
+                   </div>
+                </td>
 
-                  {/* Card Footer: Status Dropdown */}
-                  <div className="pt-2">
-                    <p className="text-xs text-slate-400 uppercase font-bold tracking-wider mb-1">Update Status</p>
-                    <select
-                      value={repair.status}
-                      onChange={(e) => handleQuickStatusUpdate(repair.id, e.target.value)}
-                      className={`w-full px-3 py-2 text-sm font-semibold rounded-lg border ${getStatusColor(repair.status)} cursor-pointer`}
-                    >
-                      <option value="pending">Pending</option>
-                      <option value="in-progress">In Progress</option>
-                      <option value="waiting-parts">Waiting Parts</option>
-                      <option value="ready">Ready</option>
-                      <option value="completed">Completed</option>
-                    </select>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </>
+                {/* Cost */}
+                <td className="px-2 py-1 text-right text-[11px] font-bold text-slate-900">
+                  {repair.cost ? `R${repair.cost}` : "-"}
+                </td>
+
+                {/* Actions */}
+                <td className="px-2 py-1 text-center">
+                  <button 
+                    onClick={() => startEdit(repair)}
+                    className="p-1 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-all"
+                    title="Edit Details"
+                  >
+                    <Edit2 size={14} />
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        {filteredRepairs.length === 0 && (
+          <div className="p-8 text-center text-slate-400 text-sm">No repairs found matching your criteria.</div>
         )}
       </div>
 
-      {/* Add/Edit Modal */}
+      {/* --- MOBILE LIST --- */}
+      <div className="md:hidden space-y-2">
+        {filteredRepairs.map((repair) => (
+          <div key={repair.id} onClick={() => startEdit(repair)} className="bg-white p-3 rounded-lg border border-slate-200 shadow-sm active:scale-[0.99] transition-transform">
+            <div className="flex justify-between items-start mb-1">
+              <div>
+                <h3 className="font-bold text-xs text-slate-900">{repair.customerName || "Walk-in"}</h3>
+                <p className="text-[10px] text-slate-500">{repair.device}</p>
+              </div>
+              <span className={`text-[10px] px-1.5 py-0.5 font-bold uppercase rounded border ${getStatusStyle(repair.status)}`}>
+                {repair.status}
+              </span>
+            </div>
+            <div className="flex justify-between items-center text-[10px] text-slate-500 border-t border-slate-50 pt-1 mt-1">
+               <span>{repair.issue}</span>
+               <span className="font-bold text-slate-900">R{repair.cost}</span>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* --- MODAL (Add/Edit) --- */}
       {(showAddModal || editingId) && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-y-auto">
-            <div className="sticky top-0 bg-white border-b border-slate-200 px-6 md:px-8 py-6 flex items-center justify-between z-10">
-              <h2 className="text-xl md:text-2xl font-bold text-slate-900">
-                {editingId ? "Edit Repair" : "Add New Repair"}
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-2 sm:p-4">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[95vh] flex flex-col">
+            
+            <div className="px-5 py-3 border-b border-slate-100 flex justify-between items-center bg-slate-50 rounded-t-xl">
+              <h2 className="text-sm font-bold text-slate-800 uppercase tracking-wide">
+                {editingId ? "Edit Repair" : "New Repair Intake"}
               </h2>
-              <button
-                onClick={() => {
-                  setShowAddModal(false);
-                  setEditingId(null);
-                  resetForm();
-                }}
-                className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
-              >
-                <X size={24} />
-              </button>
+              <button onClick={closeModal}><X size={18} className="text-slate-400 hover:text-red-500 transition-colors" /></button>
             </div>
 
-            <div className="p-6 md:p-8 space-y-6">
-              {/* Device & Contact Info */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <label className="text-sm font-semibold text-slate-700 flex items-center gap-2">
-                    <Package size={16} className="text-emerald-600" />
-                    Device Name *
+            <div className="p-5 overflow-y-auto custom-scrollbar space-y-4">
+              
+              {/* Customer Row */}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="text-[10px] uppercase font-bold text-slate-500 flex items-center gap-1">
+                    <User size={10} /> Customer Name
                   </label>
                   <input
-                    value={formData.device}
-                    onChange={(e) => setFormData({ ...formData, device: e.target.value })}
-                    placeholder="e.g., iPhone 14 Pro"
-                    className="w-full px-4 py-3 rounded-xl border border-slate-300 bg-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all"
+                    value={formData.customerName}
+                    onChange={(e) => setFormData({ ...formData, customerName: e.target.value })}
+                    className="w-full px-2.5 py-2 text-sm rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
+                    placeholder="e.g. John Doe"
                   />
                 </div>
-
-                <div className="space-y-2">
-                  <label className="text-sm font-semibold text-slate-700 flex items-center gap-2">
-                    <Phone size={16} className="text-emerald-600" />
-                    Phone Number *
+                <div className="space-y-1">
+                  <label className="text-[10px] uppercase font-bold text-slate-500 flex items-center gap-1">
+                    <Smartphone size={10} /> Phone
                   </label>
                   <input
                     value={formData.phone}
                     onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                    placeholder="+1 234 567 8900"
-                    className="w-full px-4 py-3 rounded-xl border border-slate-300 bg-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all"
+                    className="w-full px-2.5 py-2 text-sm rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                    placeholder="082 123 4567"
                   />
                 </div>
               </div>
 
-              {/* Issue Selection Dropdown */}
-              <div className="space-y-2">
-                <label className="text-sm font-semibold text-slate-700 flex items-center gap-2">
-                    <Smartphone size={16} className="text-blue-600" />
-                    Issue Category *
-                </label>
-                <select
-                  value={formData.issue}
-                  onChange={(e) => setFormData({ ...formData, issue: e.target.value })}
-                  className="w-full px-4 py-3 rounded-xl border border-slate-300 bg-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all appearance-none"
-                >
-                  {REPAIR_ISSUES.map((issue) => (
-                    <option key={issue} value={issue}>
-                      {issue}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Status & Priority */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="space-y-2">
-                  <label className="text-sm font-semibold text-slate-700">Status</label>
-                  <select
-                    value={formData.status}
-                    onChange={(e) => setFormData({ ...formData, status: e.target.value })}
-                    className="w-full px-4 py-3 rounded-xl border border-slate-300 bg-white focus:ring-2 focus:ring-emerald-500 transition-all"
+              {/* Device Row */}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                   <label className="text-[10px] uppercase font-bold text-slate-500">Device Model</label>
+                   <input
+                    value={formData.device}
+                    onChange={(e) => setFormData({ ...formData, device: e.target.value })}
+                    className="w-full px-2.5 py-2 text-sm rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                    placeholder="iPhone 14 Pro"
+                  />
+                </div>
+                <div className="space-y-1">
+                   <label className="text-[10px] uppercase font-bold text-slate-500">Issue Category</label>
+                   <select
+                    value={formData.issue}
+                    onChange={(e) => setFormData({ ...formData, issue: e.target.value })}
+                    className="w-full px-2.5 py-2 text-sm rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500 outline-none transition-all"
                   >
-                    <option value="pending">Pending</option>
-                    <option value="in-progress">In Progress</option>
-                    <option value="waiting-parts">Waiting Parts</option>
-                    <option value="ready">Ready</option>
-                    <option value="completed">Completed</option>
+                    {REPAIR_ISSUES.map((issue) => (
+                      <option key={issue} value={issue}>{issue}</option>
+                    ))}
                   </select>
                 </div>
-
-                <div className="space-y-2">
-                  <label className="text-sm font-semibold text-slate-700">Priority</label>
-                  <select
-                    value={formData.priority}
-                    onChange={(e) => setFormData({ ...formData, priority: e.target.value })}
-                    className="w-full px-4 py-3 rounded-xl border border-slate-300 bg-white focus:ring-2 focus:ring-emerald-500 transition-all"
-                  >
-                    <option value="low">Low</option>
-                    <option value="medium">Medium</option>
-                    <option value="high">High</option>
-                  </select>
-                </div>
-
-                <div className="space-y-2">
-                  <label className="text-sm font-semibold text-slate-700">Repair Cost (R)</label>
-                  <input
-                    value={formData.cost}
-                    onChange={(e) => setFormData({ ...formData, cost: e.target.value })}
-                    placeholder="0.00"
-                    type="number"
-                    step="0.01"
-                    className="w-full px-4 py-3 rounded-xl border border-slate-300 bg-white focus:ring-2 focus:ring-emerald-500 transition-all"
-                  />
-                </div>
               </div>
 
-              {/* Dates */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <label className="text-sm font-semibold text-slate-700">Date Received</label>
-                  <input
-                    value={formData.dateReceived}
-                    onChange={(e) => setFormData({ ...formData, dateReceived: e.target.value })}
-                    type="date"
-                    className="w-full px-4 py-3 rounded-xl border border-slate-300 bg-white focus:ring-2 focus:ring-emerald-500 transition-all"
-                  />
+              {/* DYNAMIC CHECKLIST (Radio/Checkbox Style) */}
+              {!editingId && (
+                <div className="bg-slate-50 p-3 rounded-lg border border-slate-200">
+                  <h3 className="text-[10px] font-bold text-blue-600 uppercase tracking-wider mb-2 flex items-center gap-2">
+                    <ClipboardList size={12} /> 
+                    Pre-Repair Checklist
+                  </h3>
+                  
+                  <div className="grid grid-cols-2 gap-2">
+                    {Object.keys(activeChecklist).map((checkItem) => (
+                      <label 
+                        key={checkItem} 
+                        className={`
+                          flex items-center gap-2 p-2 rounded-md border cursor-pointer transition-all select-none
+                          ${activeChecklist[checkItem] 
+                            ? "bg-green-50 border-green-200 text-green-800 shadow-sm" 
+                            : "bg-white border-slate-200 text-slate-500 hover:border-slate-300"
+                          }
+                        `}
+                      >
+                        <div className={`
+                          w-4 h-4 rounded-full flex items-center justify-center border transition-colors
+                          ${activeChecklist[checkItem] ? "bg-green-500 border-green-500" : "bg-white border-slate-300"}
+                        `}>
+                          {activeChecklist[checkItem] && <CheckCircle2 size={10} className="text-white" />}
+                        </div>
+                        <input
+                          type="checkbox"
+                          checked={activeChecklist[checkItem]}
+                          onChange={() => toggleChecklist(checkItem)}
+                          className="hidden"
+                        />
+                        <span className="text-[11px] font-medium leading-tight">{checkItem}</span>
+                      </label>
+                    ))}
+                  </div>
                 </div>
+              )}
 
-                <div className="space-y-2">
-                  <label className="text-sm font-semibold text-slate-700">Estimated Completion</label>
-                  <input
-                    value={formData.estimatedCompletion}
-                    onChange={(e) => setFormData({ ...formData, estimatedCompletion: e.target.value })}
-                    type="date"
-                    className="w-full px-4 py-3 rounded-xl border border-slate-300 bg-white focus:ring-2 focus:ring-emerald-500 transition-all"
-                  />
-                </div>
+              {/* Meta Data Row */}
+              <div className="grid grid-cols-3 gap-3">
+                 <div className="space-y-1">
+                    <label className="text-[10px] uppercase font-bold text-slate-500">Priority</label>
+                    <select
+                      value={formData.priority}
+                      onChange={(e) => setFormData({ ...formData, priority: e.target.value })}
+                      className="w-full px-2.5 py-2 text-sm rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500 outline-none"
+                    >
+                      <option value="low">Low</option>
+                      <option value="medium">Medium</option>
+                      <option value="high">High</option>
+                    </select>
+                 </div>
+                 <div className="space-y-1">
+                    <label className="text-[10px] uppercase font-bold text-slate-500">Cost (R)</label>
+                    <input
+                      type="number"
+                      value={formData.cost}
+                      onChange={(e) => setFormData({ ...formData, cost: e.target.value })}
+                      className="w-full px-2.5 py-2 text-sm rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500 outline-none"
+                    />
+                 </div>
+                 <div className="space-y-1">
+                    <label className="text-[10px] uppercase font-bold text-slate-500">Est. Finish</label>
+                    <input
+                      type="date"
+                      value={formData.estimatedCompletion}
+                      onChange={(e) => setFormData({ ...formData, estimatedCompletion: e.target.value })}
+                      className="w-full px-2.5 py-2 text-sm rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500 outline-none"
+                    />
+                 </div>
               </div>
 
-              {/* Notes */}
-              <div className="space-y-2">
-                <label className="text-sm font-semibold text-slate-700">Internal Notes</label>
+              <div className="space-y-1">
+                <label className="text-[10px] uppercase font-bold text-slate-500">Technician Notes</label>
                 <textarea
                   value={formData.notes}
                   onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                  placeholder="Add any internal notes or comments..."
-                  rows={3}
-                  className="w-full px-4 py-3 rounded-xl border border-slate-300 bg-white focus:ring-2 focus:ring-emerald-500 transition-all resize-none"
+                  rows={2}
+                  className="w-full px-2.5 py-2 text-sm rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500 outline-none resize-none"
+                  placeholder="Internal notes..."
                 />
               </div>
 
-              {/* Actions */}
-              <div className="flex gap-3 pt-4">
-                <button
-                  onClick={() => {
-                    setShowAddModal(false);
-                    setEditingId(null);
-                    resetForm();
-                  }}
-                  className="flex-1 px-6 py-3 border border-slate-300 text-slate-700 font-semibold rounded-xl hover:bg-slate-50 transition-all"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={() => editingId ? handleUpdateRepair(editingId) : handleAddRepair()}
-                  disabled={loading || !formData.device || !formData.phone || !formData.issue}
-                  className="flex-1 px-6 py-3 bg-gradient-to-r from-emerald-500 to-cyan-500 text-white font-semibold rounded-xl hover:shadow-lg hover:shadow-emerald-500/30 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2"
-                >
-                  {loading ? (
-                    <>
-                      <Loader2 className="animate-spin" size={20} />
-                      {editingId ? "Updating..." : "Adding..."}
-                    </>
-                  ) : (
-                    <>
-                      <Save size={20} />
-                      {editingId ? "Update Repair" : "Add Repair"}
-                    </>
-                  )}
-                </button>
-              </div>
+            </div>
+
+            <div className="px-5 py-3 border-t border-slate-100 bg-slate-50 rounded-b-xl flex gap-3">
+              <button 
+                onClick={closeModal} 
+                className="flex-1 px-4 py-2.5 text-xs font-bold uppercase text-slate-600 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button 
+                onClick={() => editingId ? handleUpdateRepair(editingId) : handleAddRepair()}
+                disabled={loading}
+                className="flex-1 px-4 py-2.5 text-xs font-bold uppercase text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50 flex justify-center items-center gap-2 transition-colors shadow-lg shadow-blue-200"
+              >
+                {loading ? <Loader2 className="animate-spin" size={14} /> : <Save size={14} />}
+                {editingId ? "Save Changes" : "Create Repair"}
+              </button>
             </div>
           </div>
         </div>

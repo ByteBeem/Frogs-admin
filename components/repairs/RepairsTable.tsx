@@ -13,9 +13,9 @@ import {
   CheckCircle2,
   ClipboardList,
   CalendarClock,
-  AlertOctagon, // Icon for Unfixable
-  XCircle,
-  Check
+  AlertOctagon, 
+  Check,
+  CalendarDays // New Icon
 } from "lucide-react";
 
 // --- Types & Constants ---
@@ -29,11 +29,11 @@ interface Repair {
   status: string;
   priority: string;
   cost: string;
-  dateReceived: string;
+  dateReceived: string; // Expected format YYYY-MM-DD
   estimatedCompletion: string;
   notes: string;
-  checklist: Record<string, boolean>; // New JSON Type
-  failureReason?: string; // New Reason Field
+  checklist: Record<string, boolean>; 
+  failureReason?: string; 
 }
 
 const REPAIR_ISSUES = [
@@ -50,18 +50,10 @@ const REPAIR_ISSUES = [
 ];
 
 const ISSUE_CHECKLISTS: Record<string, string[]> = {
-  "Battery Replacement": [
-    "Screen Working", "Charging Port working", "Device Powers On", "Everything works"
-  ],
-  "Screen Replacement": [
-    "Charging Port Working", "Battery Works", "Device Powers On", "Everything Works"
-  ],
-  "Charging Port Repair": [
-    "Microphone Working", "Speaker Working", "Screen Works", "Battery Works"
-  ],
-  "default": [
-    "Device Powers On", "Screen Works", "Charging Block Works", "Everything Works"
-  ]
+  "Battery Replacement": ["Screen Working", "Charging Port working", "Device Powers On", "Everything works"],
+  "Screen Replacement": ["Charging Port Working", "Battery Works", "Device Powers On", "Everything Works"],
+  "Charging Port Repair": ["Microphone Working", "Speaker Working", "Screen Works", "Battery Works"],
+  "default": ["Device Powers On", "Screen Works", "Charging Block Works", "Everything Works"]
 };
 
 export default function AdminRepairs() {
@@ -72,12 +64,10 @@ export default function AdminRepairs() {
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   
-  // Specific State for "Unable to Fix" handling
   const [showFailModal, setShowFailModal] = useState(false);
   const [failReasonId, setFailReasonId] = useState<string | null>(null);
   const [tempFailReason, setTempFailReason] = useState("");
 
-  // Form State
   const [formData, setFormData] = useState({
     customerName: "",
     device: "",
@@ -97,7 +87,6 @@ export default function AdminRepairs() {
     try {
       const res = await fetch("https://api.blackfroglabs.co.za/api/repairs");
       const data = await res.json();
-      // Ensure checklist is always an object even if DB returns null
       const safeData = data.map((r: any) => ({
         ...r,
         checklist: r.checklist || {}
@@ -112,7 +101,6 @@ export default function AdminRepairs() {
     fetchRepairs();
   }, []);
 
-  // Update checklist options when Issue changes (Only for New Repairs)
   useEffect(() => {
     if (!editingId) {
       const template = ISSUE_CHECKLISTS[formData.issue] || ISSUE_CHECKLISTS["default"];
@@ -127,10 +115,7 @@ export default function AdminRepairs() {
   const toggleChecklist = (item: string) => {
     setFormData(prev => ({
       ...prev,
-      checklist: {
-        ...prev.checklist,
-        [item]: !prev.checklist[item]
-      }
+      checklist: { ...prev.checklist, [item]: !prev.checklist[item] }
     }));
   };
 
@@ -170,7 +155,6 @@ export default function AdminRepairs() {
     }
   };
 
-  // Logic to intercept "unfixable" status change
   const handleQuickStatusChange = (id: string, newStatus: string) => {
     if (newStatus === "unfixable") {
       setFailReasonId(id);
@@ -183,7 +167,6 @@ export default function AdminRepairs() {
 
   const handleQuickStatusUpdate = async (id: string, status: string, failureReason?: string) => {
     setRepairs(prev => prev.map(r => r.id === id ? { ...r, status, failureReason: failureReason || r.failureReason } : r));
-    
     try {
       await fetch(`https://api.blackfroglabs.co.za/api/repairs/${id}`, {
         method: "PATCH",
@@ -206,13 +189,9 @@ export default function AdminRepairs() {
 
   const startEdit = (repair: Repair) => {
     setEditingId(repair.id);
-    
-    // Merge existing checklist with template to ensure all keys exist
     const template = ISSUE_CHECKLISTS[repair.issue] || ISSUE_CHECKLISTS["default"];
     const mergedChecklist: Record<string, boolean> = {};
-    
     template.forEach(item => {
-      // Use existing value if present, otherwise false
       mergedChecklist[item] = repair.checklist?.[item] || false;
     });
 
@@ -252,18 +231,6 @@ export default function AdminRepairs() {
     });
   };
 
-  const filteredRepairs = repairs.filter((repair) => {
-    const searchLower = searchQuery.toLowerCase();
-    const matchesSearch =
-      repair.device?.toLowerCase().includes(searchLower) ||
-      repair.customerName?.toLowerCase().includes(searchLower) ||
-      repair.phone?.includes(searchQuery) ||
-      repair.id?.toLowerCase().includes(searchLower);
-    
-    if (filterStatus === "all") return matchesSearch;
-    return matchesSearch && repair.status === filterStatus;
-  });
-
   const getStatusStyle = (status: string) => {
     switch (status) {
       case "pending": return "bg-yellow-50 text-yellow-700 border-yellow-200";
@@ -276,11 +243,71 @@ export default function AdminRepairs() {
     }
   };
 
+  // --- 1. FILTER ---
+  const filteredRepairs = repairs.filter((repair) => {
+    const searchLower = searchQuery.toLowerCase();
+    const matchesSearch =
+      repair.device?.toLowerCase().includes(searchLower) ||
+      repair.customerName?.toLowerCase().includes(searchLower) ||
+      repair.phone?.includes(searchQuery) ||
+      repair.id?.toLowerCase().includes(searchLower);
+    
+    if (filterStatus === "all") return matchesSearch;
+    return matchesSearch && repair.status === filterStatus;
+  });
+
+  // --- 2. SORT (Newest First) ---
+  const sortedRepairs = [...filteredRepairs].sort((a, b) => {
+    return new Date(b.dateReceived).getTime() - new Date(a.dateReceived).getTime();
+  });
+
+  // --- 3. GROUP BY DATE ---
+  const getGroupTitle = (dateStr: string) => {
+    if (!dateStr) return "Unknown Date";
+    const date = new Date(dateStr);
+    const today = new Date();
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+
+    const dStr = date.toISOString().split('T')[0];
+    const tStr = today.toISOString().split('T')[0];
+    const yStr = yesterday.toISOString().split('T')[0];
+
+    if (dStr === tStr) return "Today";
+    if (dStr === yStr) return "Yesterday";
+    
+    // Format: "Mon, Jan 5"
+    return date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+  };
+
+  // Create dictionary of groups
+  const groupedRepairs = sortedRepairs.reduce((groups, repair) => {
+    const title = getGroupTitle(repair.dateReceived);
+    if (!groups[title]) {
+      groups[title] = [];
+    }
+    groups[title].push(repair);
+    return groups;
+  }, {} as Record<string, Repair[]>);
+
+  // Define order of keys explicitly for Today/Yesterday to appear first
+  const groupKeys = Object.keys(groupedRepairs).sort((a, b) => {
+    if (a === "Today") return -1;
+    if (b === "Today") return 1;
+    if (a === "Yesterday") return -1;
+    if (b === "Yesterday") return 1;
+    // For other dates, we rely on the fact that 'sortedRepairs' was already time-sorted
+    // but the reduce object keys might scramble. Let's rely on finding the first repair's date.
+    const dateA = new Date(groupedRepairs[a][0].dateReceived).getTime();
+    const dateB = new Date(groupedRepairs[b][0].dateReceived).getTime();
+    return dateB - dateA;
+  });
+
   return (
     <main className="min-h-screen bg-white p-2 md:p-6 text-slate-900 font-sans">
       
       {/* Top Bar */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 mb-2 border-b border-slate-200 pb-3">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 mb-4 border-b border-slate-200 pb-3">
         <div className="flex items-center gap-4">
           <h1 className="text-lg font-bold text-slate-800 tracking-tight">Repairs</h1>
           <div className="flex gap-1 overflow-x-auto no-scrollbar">
@@ -319,7 +346,7 @@ export default function AdminRepairs() {
         </div>
       </div>
 
-      {/* --- DESKTOP TABLE --- */}
+      {/* --- DESKTOP TABLE WITH DATE GROUPS --- */}
       <div className="hidden md:block overflow-visible border border-slate-200 rounded-md">
         <table className="w-full text-left border-collapse">
           <thead className="bg-slate-50 text-slate-500">
@@ -335,141 +362,159 @@ export default function AdminRepairs() {
               <th className="px-2 py-2 text-[10px] font-bold uppercase tracking-wider border-b border-slate-200 w-12 text-center">Act</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-100 bg-white">
-            {filteredRepairs.map((repair) => (
-              <tr key={repair.id} className="hover:bg-blue-50/40 group transition-colors">
-                
-                <td className="px-2 py-1 text-[11px] text-slate-400 font-mono text-center border-r border-slate-100">
-                  {repair.id.slice(-4)}
-                </td>
 
-                <td className="px-2 py-1">
-                  <div className="flex flex-col leading-tight">
-                    <span className="text-[11px] font-bold text-slate-800 truncate block max-w-[150px]">
-                      {repair.customerName || "Walk-in"}
-                    </span>
-                    <span className="text-[10px] text-slate-400 truncate block max-w-[150px]">
-                      {repair.phone}
-                    </span>
-                  </div>
-                </td>
+          {/* Render Groups */}
+          {groupKeys.length === 0 ? (
+            <tbody>
+              <tr><td colSpan={9} className="text-center py-8 text-slate-400 text-sm">No repairs found</td></tr>
+            </tbody>
+          ) : (
+            groupKeys.map(groupTitle => (
+              <tbody key={groupTitle} className="border-b last:border-0 border-slate-100">
+                {/* --- DATE HEADER ROW --- */}
+                <tr className="bg-slate-50/50">
+                  <td colSpan={9} className="px-2 py-1.5 border-b border-slate-100">
+                    <div className="flex items-center gap-2">
+                       <CalendarDays size={12} className={groupTitle === "Today" ? "text-blue-500" : "text-slate-400"} />
+                       <span className={`text-[10px] font-bold uppercase tracking-wider ${
+                         groupTitle === "Today" ? "text-blue-600" : "text-slate-500"
+                       }`}>
+                         {groupTitle}
+                       </span>
+                       <span className="text-[10px] text-slate-300 font-medium">({groupedRepairs[groupTitle].length})</span>
+                    </div>
+                  </td>
+                </tr>
 
-                <td className="px-2 py-1 text-[11px] text-slate-700 font-medium truncate max-w-[150px]">
-                  {repair.device}
-                </td>
-
-                <td className="px-2 py-1 text-[11px] text-slate-600 truncate max-w-[200px]" title={repair.issue}>
-                  {repair.issue}
-                </td>
-
-                {/* --- CHECKLIST HOVER DISPLAY --- */}
-                <td className="px-2 py-1 text-center relative">
-                   <div className="group inline-block cursor-help">
-                      <ClipboardList size={14} className={Object.keys(repair.checklist || {}).length > 0 ? "text-blue-500" : "text-slate-300"} />
-                      
-                      {/* Tooltip Content */}
-                      <div className="absolute left-1/2 -translate-x-1/2 top-6 z-50 hidden group-hover:block w-48 p-2 bg-white border border-slate-200 shadow-xl rounded-lg text-left pointer-events-none">
-                        <p className="text-[10px] font-bold text-slate-400 uppercase mb-1 border-b pb-1">Inspection Results</p>
-                        {repair.checklist && Object.keys(repair.checklist).length > 0 ? (
-                           Object.entries(repair.checklist).map(([key, value]) => (
-                             <div key={key} className="flex justify-between items-center py-0.5">
-                               <span className="text-[10px] text-slate-600 truncate max-w-[120px]">{key}</span>
-                               {value ? <Check size={10} className="text-green-500"/> : <X size={10} className="text-red-400"/>}
-                             </div>
-                           ))
-                        ) : (
-                          <span className="text-[10px] text-slate-400">No checklist data</span>
-                        )}
+                {/* --- REPAIR ROWS --- */}
+                {groupedRepairs[groupTitle].map((repair) => (
+                  <tr key={repair.id} className="hover:bg-blue-50/40 group transition-colors bg-white">
+                    <td className="px-2 py-1 text-[11px] text-slate-400 font-mono text-center border-r border-slate-100">
+                      {repair.id.slice(-4)}
+                    </td>
+                    <td className="px-2 py-1">
+                      <div className="flex flex-col leading-tight">
+                        <span className="text-[11px] font-bold text-slate-800 truncate block max-w-[150px]">
+                          {repair.customerName || "Walk-in"}
+                        </span>
+                        <span className="text-[10px] text-slate-400 truncate block max-w-[150px]">
+                          {repair.phone}
+                        </span>
                       </div>
-                   </div>
-                </td>
-
-                 <td className="px-2 py-1">
-                  {repair.estimatedCompletion ? (
-                     <div className="flex items-center gap-1 text-[10px] text-slate-600">
-                       <CalendarClock size={10} className="text-slate-400"/>
-                       {repair.estimatedCompletion}
-                     </div>
-                  ) : (
-                    <span className="text-[10px] text-slate-300">-</span>
-                  )}
-                </td>
-
-                {/* Status Dropdown */}
-                <td className="px-2 py-1">
-                   <select
-                    value={repair.status}
-                    onChange={(e) => handleQuickStatusChange(repair.id, e.target.value)}
-                    className={`
-                      appearance-none w-full text-[10px] font-bold uppercase py-0.5 px-2 rounded 
-                      border ${getStatusStyle(repair.status)} 
-                      cursor-pointer focus:outline-none focus:ring-1 focus:ring-blue-500
-                    `}
-                  >
-                    <option value="pending">Pending</option>
-                    <option value="in-progress">Working</option>
-                    <option value="waiting-parts">Parts</option>
-                    <option value="ready">Ready</option>
-                    <option value="completed">Done</option>
-                    <option value="unfixable">Unfixable</option>
-                  </select>
-                </td>
-
-                <td className="px-2 py-1 text-right text-[11px] font-bold text-slate-900">
-                  {repair.cost ? `R${repair.cost}` : "-"}
-                </td>
-
-                <td className="px-2 py-1 text-center">
-                  <button 
-                    onClick={() => startEdit(repair)}
-                    className="p-1 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-all"
-                  >
-                    <Edit2 size={14} />
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
+                    </td>
+                    <td className="px-2 py-1 text-[11px] text-slate-700 font-medium truncate max-w-[150px]">
+                      {repair.device}
+                    </td>
+                    <td className="px-2 py-1 text-[11px] text-slate-600 truncate max-w-[200px]" title={repair.issue}>
+                      {repair.issue}
+                    </td>
+                    <td className="px-2 py-1 text-center relative">
+                      <div className="group inline-block cursor-help">
+                          <ClipboardList size={14} className={Object.keys(repair.checklist || {}).length > 0 ? "text-blue-500" : "text-slate-300"} />
+                          <div className="absolute left-1/2 -translate-x-1/2 top-6 z-50 hidden group-hover:block w-48 p-2 bg-white border border-slate-200 shadow-xl rounded-lg text-left pointer-events-none">
+                            <p className="text-[10px] font-bold text-slate-400 uppercase mb-1 border-b pb-1">Inspection Results</p>
+                            {repair.checklist && Object.keys(repair.checklist).length > 0 ? (
+                              Object.entries(repair.checklist).map(([key, value]) => (
+                                <div key={key} className="flex justify-between items-center py-0.5">
+                                  <span className="text-[10px] text-slate-600 truncate max-w-[120px]">{key}</span>
+                                  {value ? <Check size={10} className="text-green-500"/> : <X size={10} className="text-red-400"/>}
+                                </div>
+                              ))
+                            ) : (<span className="text-[10px] text-slate-400">No checklist data</span>)}
+                          </div>
+                      </div>
+                    </td>
+                    <td className="px-2 py-1">
+                      {repair.estimatedCompletion ? (
+                        <div className="flex items-center gap-1 text-[10px] text-slate-600">
+                          <CalendarClock size={10} className="text-slate-400"/>
+                          {repair.estimatedCompletion}
+                        </div>
+                      ) : (<span className="text-[10px] text-slate-300">-</span>)}
+                    </td>
+                    <td className="px-2 py-1">
+                      <select
+                        value={repair.status}
+                        onChange={(e) => handleQuickStatusChange(repair.id, e.target.value)}
+                        className={`appearance-none w-full text-[10px] font-bold uppercase py-0.5 px-2 rounded border ${getStatusStyle(repair.status)} cursor-pointer focus:outline-none focus:ring-1 focus:ring-blue-500`}
+                      >
+                        <option value="pending">Pending</option>
+                        <option value="in-progress">Working</option>
+                        <option value="waiting-parts">Parts</option>
+                        <option value="ready">Ready</option>
+                        <option value="completed">Done</option>
+                        <option value="unfixable">Unfixable</option>
+                      </select>
+                    </td>
+                    <td className="px-2 py-1 text-right text-[11px] font-bold text-slate-900">
+                      {repair.cost ? `R${repair.cost}` : "-"}
+                    </td>
+                    <td className="px-2 py-1 text-center">
+                      <button onClick={() => startEdit(repair)} className="p-1 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-all">
+                        <Edit2 size={14} />
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            ))
+          )}
         </table>
       </div>
 
-      {/* --- MOBILE LIST --- */}
-      <div className="md:hidden space-y-2">
-        {filteredRepairs.map((repair) => (
-          <div key={repair.id} onClick={() => startEdit(repair)} className="bg-white p-3 rounded-lg border border-slate-200 shadow-sm">
-            <div className="flex justify-between items-start mb-1">
-              <div>
-                <h3 className="font-bold text-xs text-slate-900">{repair.customerName}</h3>
-                <p className="text-[10px] text-slate-500">{repair.device}</p>
+      {/* --- MOBILE LIST WITH DATE HEADERS --- */}
+      <div className="md:hidden space-y-4">
+        {groupKeys.length === 0 ? (
+           <p className="text-center text-slate-400 text-xs py-10">No repairs found</p>
+        ) : (
+          groupKeys.map(groupTitle => (
+            <div key={groupTitle}>
+              {/* Date Header Mobile */}
+              <div className="flex items-center gap-2 mb-2 px-1">
+                <span className={`text-[10px] font-bold uppercase tracking-wider ${
+                    groupTitle === "Today" ? "text-blue-600" : "text-slate-500"
+                  }`}>
+                    {groupTitle}
+                </span>
+                <div className="h-px bg-slate-200 flex-1"></div>
               </div>
-              <span className={`text-[10px] px-1.5 py-0.5 font-bold uppercase rounded border ${getStatusStyle(repair.status)}`}>
-                {repair.status}
-              </span>
+
+              <div className="space-y-2">
+                {groupedRepairs[groupTitle].map((repair) => (
+                  <div key={repair.id} onClick={() => startEdit(repair)} className="bg-white p-3 rounded-lg border border-slate-200 shadow-sm">
+                    <div className="flex justify-between items-start mb-1">
+                      <div>
+                        <h3 className="font-bold text-xs text-slate-900">{repair.customerName}</h3>
+                        <p className="text-[10px] text-slate-500">{repair.device}</p>
+                      </div>
+                      <span className={`text-[10px] px-1.5 py-0.5 font-bold uppercase rounded border ${getStatusStyle(repair.status)}`}>
+                        {repair.status}
+                      </span>
+                    </div>
+                    {repair.status === 'unfixable' && (
+                      <div className="bg-red-50 text-red-800 text-[10px] p-1.5 rounded mt-1 border border-red-100 flex gap-1">
+                        <AlertOctagon size={12}/> {repair.failureReason || "No reason provided"}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
             </div>
-            {repair.status === 'unfixable' && (
-               <div className="bg-red-50 text-red-800 text-[10px] p-1.5 rounded mt-1 border border-red-100 flex gap-1">
-                 <AlertOctagon size={12}/> {repair.failureReason || "No reason provided"}
-               </div>
-            )}
-          </div>
-        ))}
+          ))
+        )}
       </div>
 
-      {/* --- MODAL: Add/Edit Repair --- */}
+      {/* ... (Keep existing Modals: Add/Edit and Quick Fail) ... */}
       {(showAddModal || editingId) && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-2 sm:p-4">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[95vh] flex flex-col">
-            
             <div className="px-5 py-3 border-b border-slate-100 flex justify-between items-center bg-slate-50 rounded-t-xl">
               <h2 className="text-sm font-bold text-slate-800 uppercase tracking-wide">
                 {editingId ? "Edit Repair" : "New Repair Intake"}
               </h2>
               <button onClick={closeModal}><X size={18} className="text-slate-400 hover:text-red-500" /></button>
             </div>
-
             <div className="p-5 overflow-y-auto custom-scrollbar space-y-4">
-              
-              {/* Customer & Phone */}
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1">
                   <label className="text-[10px] uppercase font-bold text-slate-500 flex items-center gap-1">
@@ -494,8 +539,6 @@ export default function AdminRepairs() {
                   />
                 </div>
               </div>
-
-              {/* Device & Issue */}
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1">
                    <label className="text-[10px] uppercase font-bold text-slate-500">Device Model</label>
@@ -519,30 +562,17 @@ export default function AdminRepairs() {
                   </select>
                 </div>
               </div>
-
-              {/* DYNAMIC CHECKLIST */}
               <div className="bg-slate-50 p-3 rounded-lg border border-slate-200">
                 <h3 className="text-[10px] font-bold text-blue-600 uppercase tracking-wider mb-2 flex items-center gap-2">
-                  <ClipboardList size={12} /> 
-                  Pre-Repair Checklist
+                  <ClipboardList size={12} /> Pre-Repair Checklist
                 </h3>
-                
                 <div className="grid grid-cols-2 gap-2">
                   {Object.keys(formData.checklist).map((checkItem) => (
                     <label 
                       key={checkItem} 
-                      className={`
-                        flex items-center gap-2 p-2 rounded-md border cursor-pointer transition-all select-none
-                        ${formData.checklist[checkItem] 
-                          ? "bg-green-50 border-green-200 text-green-800 shadow-sm" 
-                          : "bg-white border-slate-200 text-slate-500 hover:border-slate-300"
-                        }
-                      `}
+                      className={`flex items-center gap-2 p-2 rounded-md border cursor-pointer transition-all select-none ${formData.checklist[checkItem] ? "bg-green-50 border-green-200 text-green-800 shadow-sm" : "bg-white border-slate-200 text-slate-500 hover:border-slate-300"}`}
                     >
-                      <div className={`
-                        w-4 h-4 rounded-full flex items-center justify-center border transition-colors
-                        ${formData.checklist[checkItem] ? "bg-green-500 border-green-500" : "bg-white border-slate-300"}
-                      `}>
+                      <div className={`w-4 h-4 rounded-full flex items-center justify-center border transition-colors ${formData.checklist[checkItem] ? "bg-green-500 border-green-500" : "bg-white border-slate-300"}`}>
                         {formData.checklist[checkItem] && <CheckCircle2 size={10} className="text-white" />}
                       </div>
                       <input
@@ -556,8 +586,6 @@ export default function AdminRepairs() {
                   ))}
                 </div>
               </div>
-
-              {/* Status Section with Unfixable Logic */}
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                  <div className="space-y-1">
                     <label className="text-[10px] uppercase font-bold text-slate-500">Status</label>
@@ -596,8 +624,6 @@ export default function AdminRepairs() {
                     />
                  </div>
               </div>
-
-              {/* CONDITIONAL: Failure Reason Input */}
               {formData.status === "unfixable" && (
                 <div className="bg-red-50 p-3 rounded-lg border border-red-100">
                   <label className="text-[10px] uppercase font-bold text-red-600 flex items-center gap-1 mb-1">
@@ -612,7 +638,6 @@ export default function AdminRepairs() {
                   />
                 </div>
               )}
-
               <div className="space-y-1">
                 <label className="text-[10px] uppercase font-bold text-slate-500">Technician Notes</label>
                 <textarea
@@ -623,9 +648,7 @@ export default function AdminRepairs() {
                   placeholder="Internal notes..."
                 />
               </div>
-
             </div>
-
             <div className="px-5 py-3 border-t border-slate-100 bg-slate-50 rounded-b-xl flex gap-3">
               <button 
                 onClick={closeModal} 
@@ -646,7 +669,6 @@ export default function AdminRepairs() {
         </div>
       )}
 
-      {/* --- MODAL: Quick Fail Reason --- */}
       {showFailModal && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-[60] flex items-center justify-center p-4">
           <div className="bg-white rounded-lg shadow-xl w-full max-w-md p-6">

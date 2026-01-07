@@ -24,7 +24,7 @@ const nav = [
   { name: "Repairs", href: "/repairs", icon: Wrench },
   { name: "Live Chat", href: "/chat", icon: MessageSquare },
   { name: "Shop", href: "/shop/orders", icon: ShoppingCart },
-  { name: "Settings", href: "/settings", icon: Settings },
+  
 ];
 
 export default function Sidebar() {

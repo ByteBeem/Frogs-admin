@@ -15,7 +15,7 @@ import {
   CalendarClock,
   AlertOctagon, 
   Check,
-  CalendarDays // New Icon
+  CalendarDays 
 } from "lucide-react";
 
 // --- Types & Constants ---
@@ -29,7 +29,7 @@ interface Repair {
   status: string;
   priority: string;
   cost: string;
-  dateReceived: string; // Expected format YYYY-MM-DD
+  dateReceived: string; 
   estimatedCompletion: string;
   notes: string;
   checklist: Record<string, boolean>; 
@@ -243,7 +243,7 @@ export default function AdminRepairs() {
     }
   };
 
-  // --- 1. FILTER ---
+  // --- FILTERS & SORTING ---
   const filteredRepairs = repairs.filter((repair) => {
     const searchLower = searchQuery.toLowerCase();
     const matchesSearch =
@@ -256,12 +256,10 @@ export default function AdminRepairs() {
     return matchesSearch && repair.status === filterStatus;
   });
 
-  // --- 2. SORT (Newest First) ---
   const sortedRepairs = [...filteredRepairs].sort((a, b) => {
     return new Date(b.dateReceived).getTime() - new Date(a.dateReceived).getTime();
   });
 
-  // --- 3. GROUP BY DATE ---
   const getGroupTitle = (dateStr: string) => {
     if (!dateStr) return "Unknown Date";
     const date = new Date(dateStr);
@@ -275,29 +273,21 @@ export default function AdminRepairs() {
 
     if (dStr === tStr) return "Today";
     if (dStr === yStr) return "Yesterday";
-    
-    // Format: "Mon, Jan 5"
     return date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
   };
 
-  // Create dictionary of groups
   const groupedRepairs = sortedRepairs.reduce((groups, repair) => {
     const title = getGroupTitle(repair.dateReceived);
-    if (!groups[title]) {
-      groups[title] = [];
-    }
+    if (!groups[title]) groups[title] = [];
     groups[title].push(repair);
     return groups;
   }, {} as Record<string, Repair[]>);
 
-  // Define order of keys explicitly for Today/Yesterday to appear first
   const groupKeys = Object.keys(groupedRepairs).sort((a, b) => {
     if (a === "Today") return -1;
     if (b === "Today") return 1;
     if (a === "Yesterday") return -1;
     if (b === "Yesterday") return 1;
-    // For other dates, we rely on the fact that 'sortedRepairs' was already time-sorted
-    // but the reduce object keys might scramble. Let's rely on finding the first repair's date.
     const dateA = new Date(groupedRepairs[a][0].dateReceived).getTime();
     const dateB = new Date(groupedRepairs[b][0].dateReceived).getTime();
     return dateB - dateA;
@@ -307,7 +297,7 @@ export default function AdminRepairs() {
     <main className="min-h-screen bg-white p-2 md:p-6 text-slate-900 font-sans">
       
       {/* Top Bar */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 mb-4 border-b border-slate-200 pb-3">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 mb-6 border-b border-slate-200 pb-3">
         <div className="flex items-center gap-4">
           <h1 className="text-lg font-bold text-slate-800 tracking-tight">Repairs</h1>
           <div className="flex gap-1 overflow-x-auto no-scrollbar">
@@ -346,7 +336,7 @@ export default function AdminRepairs() {
         </div>
       </div>
 
-      {/* --- DESKTOP TABLE WITH DATE GROUPS --- */}
+      {/* --- DESKTOP TABLE WITH BOLD DIVIDERS --- */}
       <div className="hidden md:block overflow-visible border border-slate-200 rounded-md">
         <table className="w-full text-left border-collapse">
           <thead className="bg-slate-50 text-slate-500">
@@ -363,25 +353,30 @@ export default function AdminRepairs() {
             </tr>
           </thead>
 
-          {/* Render Groups */}
           {groupKeys.length === 0 ? (
             <tbody>
               <tr><td colSpan={9} className="text-center py-8 text-slate-400 text-sm">No repairs found</td></tr>
             </tbody>
           ) : (
             groupKeys.map(groupTitle => (
-              <tbody key={groupTitle} className="border-b last:border-0 border-slate-100">
-                {/* --- DATE HEADER ROW --- */}
-                <tr className="bg-slate-50/50">
-                  <td colSpan={9} className="px-2 py-1.5 border-b border-slate-100">
-                    <div className="flex items-center gap-2">
-                       <CalendarDays size={12} className={groupTitle === "Today" ? "text-blue-500" : "text-slate-400"} />
-                       <span className={`text-[10px] font-bold uppercase tracking-wider ${
-                         groupTitle === "Today" ? "text-blue-600" : "text-slate-500"
+              <tbody key={groupTitle}>
+                {/* --- HEADER ROW WITH BOLD LINE --- */}
+                {/* Notice the border-t-[3px] border-slate-800 */}
+                <tr className="bg-slate-50 border-t-[3px] border-slate-800">
+                  <td colSpan={9} className="px-3 py-2 border-b border-slate-200">
+                    <div className="flex items-center gap-3">
+                       {/* High contrast text */}
+                       <span className={`text-xs font-black uppercase tracking-wide flex items-center gap-2 ${
+                         groupTitle === "Today" ? "text-blue-700" : "text-slate-900"
                        }`}>
+                         <CalendarDays size={14} className={groupTitle === "Today" ? "text-blue-600" : "text-slate-900"} />
                          {groupTitle}
                        </span>
-                       <span className="text-[10px] text-slate-300 font-medium">({groupedRepairs[groupTitle].length})</span>
+                       <span className="bg-slate-200 text-slate-600 text-[10px] font-bold px-1.5 py-0.5 rounded-md">
+                         {groupedRepairs[groupTitle].length}
+                       </span>
+                       {/* Visual Line extending to right */}
+                       <div className="h-px bg-slate-300 flex-1 ml-2"></div>
                     </div>
                   </td>
                 </tr>
@@ -462,21 +457,23 @@ export default function AdminRepairs() {
         </table>
       </div>
 
-      {/* --- MOBILE LIST WITH DATE HEADERS --- */}
-      <div className="md:hidden space-y-4">
+      {/* --- MOBILE LIST WITH BOLD DIVIDERS --- */}
+      <div className="md:hidden space-y-6">
         {groupKeys.length === 0 ? (
            <p className="text-center text-slate-400 text-xs py-10">No repairs found</p>
         ) : (
           groupKeys.map(groupTitle => (
             <div key={groupTitle}>
-              {/* Date Header Mobile */}
-              <div className="flex items-center gap-2 mb-2 px-1">
-                <span className={`text-[10px] font-bold uppercase tracking-wider ${
-                    groupTitle === "Today" ? "text-blue-600" : "text-slate-500"
+              {/* Date Header Mobile - BOLD LINE */}
+              <div className="flex items-center gap-2 mb-3 px-1 border-t-[3px] border-slate-800 pt-4">
+                <span className={`text-xs font-black uppercase tracking-wide ${
+                    groupTitle === "Today" ? "text-blue-700" : "text-slate-900"
                   }`}>
                     {groupTitle}
                 </span>
-                <div className="h-px bg-slate-200 flex-1"></div>
+                <span className="text-[10px] bg-slate-100 px-1.5 py-0.5 rounded font-bold text-slate-600">
+                  {groupedRepairs[groupTitle].length}
+                </span>
               </div>
 
               <div className="space-y-2">
@@ -504,7 +501,7 @@ export default function AdminRepairs() {
         )}
       </div>
 
-      {/* ... (Keep existing Modals: Add/Edit and Quick Fail) ... */}
+      {/* --- MODALS (Unchanged) --- */}
       {(showAddModal || editingId) && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-2 sm:p-4">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[95vh] flex flex-col">

@@ -23,7 +23,7 @@ const nav = [
   { name: "Bookings", href: "/bookings", icon: Calendar },
   { name: "Repairs", href: "/repairs", icon: Wrench },
   { name: "Live Chat", href: "/chat", icon: MessageSquare },
-  { name: "Shop", href: "/shop/orders", icon: ShoppingCart },
+  { name: "Shop", href: "/shop", icon: ShoppingCart },
   
 ];
 

@@ -8,7 +8,8 @@ import {
   MessageSquare, 
   CalendarCheck, 
   CheckCircle2, 
-  Info 
+  Info,
+  ShoppingBag // 1. Added Icon for Orders
 } from "lucide-react";
 import io, { Socket } from "socket.io-client";
 import { format } from "date-fns"; 
@@ -16,7 +17,7 @@ import { format } from "date-fns";
 // --- TYPES ---
 interface NotificationItem {
   id: string;
-  type: 'message' | 'booking' | 'system';
+  type: 'message' | 'booking' | 'system' | 'order'; // 2. Added 'order' type
   title: string;
   message: string;
   timestamp: string;
@@ -96,7 +97,7 @@ export default function Topbar() {
     // --- B. NEW CHAT (Visitor Started) ---
     socket.on("admin:new-conversation", (data) => {
       addNotification({
-        id: `conv-${Date.now()}`, // Generate unique ID
+        id: `conv-${Date.now()}`, 
         type: 'message',
         title: 'New Conversation',
         message: `Visitor #${data.visitorId.slice(0, 8)} started a chat.`,
@@ -125,8 +126,21 @@ export default function Topbar() {
       addNotification({
         id: `book-${Date.now()}`,
         type: 'booking',
-        title: data.title,    // "New Booking Received"
-        message: data.message, // "John Doe booked a repair..."
+        title: data.title,    
+        message: data.message, 
+        timestamp: data.timestamp,
+        read: false,
+        details: data.details
+      });
+    });
+
+    // --- E. NEW ORDER (Added Listener) ---
+    socket.on("admin:new-order", (data) => {
+      addNotification({
+        id: `order-${Date.now()}`,
+        type: 'order',
+        title: data.title,    // "New Order Received"
+        message: data.message, // "Name ordered Product (R500)"
         timestamp: data.timestamp,
         read: false,
         details: data.details
@@ -146,9 +160,8 @@ export default function Topbar() {
   };
 
   const handleDismiss = (e: React.MouseEvent, id: string) => {
-    e.stopPropagation(); // Prevent dropdown from closing
+    e.stopPropagation(); 
     setNotifications((prev) => prev.filter((n) => n.id !== id));
-    // Decrease count but don't go below 0
     setUnreadCount((prev) => Math.max(0, prev - 1));
   };
 
@@ -217,10 +230,13 @@ export default function Topbar() {
                           {/* Icon Circle (Color based on Type) */}
                           <div className={`mt-1 flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center 
                             ${note.type === 'booking' ? 'bg-indigo-100 text-indigo-600' : 
-                              note.type === 'message' ? 'bg-emerald-100 text-emerald-600' : 'bg-slate-100 text-slate-600'}`}>
+                              note.type === 'message' ? 'bg-emerald-100 text-emerald-600' : 
+                              note.type === 'order' ? 'bg-blue-100 text-blue-600' : // Added Order Color
+                              'bg-slate-100 text-slate-600'}`}>
                             
                             {note.type === 'booking' && <CalendarCheck className="w-4 h-4" />}
                             {note.type === 'message' && <MessageSquare className="w-4 h-4" />}
+                            {note.type === 'order' && <ShoppingBag className="w-4 h-4" />} {/* Added Order Icon */}
                             {note.type === 'system' && <Info className="w-4 h-4" />}
                           </div>
 

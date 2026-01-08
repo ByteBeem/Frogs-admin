@@ -27,7 +27,7 @@ export default function ProductManagement() {
   
   // Modals State
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [deleteId, setDeleteId] = useState<number | null>(null); // Track which item to delete
+  const [deleteId, setDeleteId] = useState<number | null>(null); 
   
   // Loading States
   const [isUploading, setIsUploading] = useState(false);
